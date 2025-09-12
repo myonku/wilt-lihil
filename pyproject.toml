@@ -1,0 +1,15 @@
+[project]
+name = "wilt-lihil"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "aioredis>=2.0.1",
+    "beanie>=2.0.0",
+    "lihil>=0.2.25",
+    "msgpack>=1.1.1",
+    "sqlalchemy>=2.0.43",
+    "uvicorn>=0.35.0",
+]
+

@@ -1,0 +1,28 @@
+[lihil]
+API_VERSION = "1"
+
+[lihil.mongo]
+DIALECT = "mongodb"
+HOST = "localhost"
+PORT = 27017
+USER = "wilt"
+PASSWORD = "123456"
+DATABASE = "pec"
+DIRECTCONNECTION = true
+AUTHSOURCE = "admin"
+
+[lihil.sqlserver]
+DIALECT = "ms-sqlserver"
+HOST = "localhost"
+PORT = 1433
+USER = "sa"
+PASSWORD = "*******"
+DATABASE = "pec"
+Trusted_Connection = true
+
+[lihil.redis]
+DIALECT = "redis"
+HOST = "localhost"
+PORT = 6379
+DATABASE = 0
+PASSWORD = "123456"
