@@ -6,6 +6,7 @@ from typing import Any
 from aioredis import Redis, from_url
 import msgpack
 
+from config import ProjectConfig
 from repo.models import Session
 
 
@@ -25,9 +26,11 @@ class RedisManager:
         except Exception:
             return False
 
-    async def connect(self, redis_url: str, **kwargs):
+    async def connect(self, config: ProjectConfig, **kwargs):
         """连接 Redis"""
-        print(f"正在连接Redis: {redis_url}")
+        if not config.redis:
+            raise ConnectionError("Redis配置初始化失败")
+        print(f"正在连接Redis: {config.redis.redis_uri}")
 
         default_kwargs = {
             "encoding": "utf-8",
@@ -38,7 +41,7 @@ class RedisManager:
         }
         default_kwargs.update(kwargs)
 
-        self.redis = await from_url(redis_url, **default_kwargs)
+        self.redis = await from_url(config.redis.redis_uri, **default_kwargs)
         self.is_initialized = True
         print("Redis连接完成")
 

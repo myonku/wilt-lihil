@@ -6,7 +6,6 @@ from typing import TypeVar, Generic
 from sqlalchemy import select, update, delete, insert
 import sqlalchemy
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.ext.asyncio import AsyncConnection
 from uuid import UUID
 
 from repo.db import MSSQLServer

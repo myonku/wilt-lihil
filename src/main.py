@@ -1,4 +1,4 @@
-from . import log_config
+# from . import log_config  # 启用uvicorn内置日志系统
 from typing import Literal
 from lihil import Lihil, Request, Response, Route
 from src.config import read_config
@@ -16,31 +16,27 @@ from repo.factory import (
     group_dao,
     login_history_dao,
 )
+from api.http_errors import InternalError
 from repo.redis_manager import RedisManager, session_dao
 from repo.db import MSSQLServer, MongoDB
 from repo.models import Review, ReviewFlow, ReviewStage, UserProfile
+from middlewares.session_middleware import session_middleware_factory
 
 
 @problem_solver
-def handle_error(req: Request, exc: Literal[500]) -> Response:
+def handle_error(req: Request, exc: Literal[500] | InternalError) -> Response:
     return Response(f"Internal Error: {str(exc)}", 500)
 
 
 async def lifespan(app: Lihil):
     config = read_config("settings.toml", ".env")
-    if not config.mongo:
-        raise ConnectionError("Mongo配置初始化失败")
-    if not config.mssql:
-        raise ConnectionError("MySQL配置初始化失败")
-    if not config.redis:
-        raise ConnectionError("Redis配置初始化失败")
-    await redis.connect(config.redis.redis_uri)
+
+    await redis.connect(config)
+    await mssql.connect(config)
     await mongo.connect(
-        config.mongo.mongo_uri,
-        config.mongo.DATABASE,
+        config,
         [ReviewStage, ReviewFlow, Review, UserProfile],
     )
-    await mssql.connect(config.mssql.mssql_uri)
     app.graph.register_singleton(mongo, MongoDB)
     app.graph.register_singleton(mssql, MSSQLServer)
     app.graph.register_singleton(redis, RedisManager)
@@ -73,13 +69,16 @@ def app_factory() -> Lihil:
 
     lhl = Lihil(root, app_config=app_config, lifespan=lifespan)
     lhl.add_middleware(
-        lambda app: CORSMiddleware(
-            app,
-            allow_origins=["*"],
-            allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
-        )
+        [
+            session_middleware_factory,
+            lambda app: CORSMiddleware(
+                app,
+                allow_origins=["*"],
+                allow_credentials=True,
+                allow_methods=["*"],
+                allow_headers=["*"],
+            ),
+        ]
     )
     return lhl
 

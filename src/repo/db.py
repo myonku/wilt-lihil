@@ -2,6 +2,8 @@ from beanie import init_beanie
 from pymongo import AsyncMongoClient
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine, AsyncConnection
 
+from config import ProjectConfig
+
 
 class MongoDB:
     """MongoDB 连接管理器，集成 Beanie ODM"""
@@ -21,18 +23,21 @@ class MongoDB:
             return False
 
     async def connect(
-        self, uri: str, db_name: str, document_models: list | None = None
+        self, config: ProjectConfig, document_models: list | None = None
     ):
         """连接数据库并初始化 Beanie"""
-        print(f"正在连接MongoDB服务: {uri}")
-        self.client = AsyncMongoClient(uri)
+        if not config.mongo:
+            raise ConnectionError("Mongo配置初始化失败")
+        print(f"正在连接MongoDB服务: {config.mongo.mongo_uri}")
+        self.client = AsyncMongoClient(config.mongo.mongo_uri)
         if document_models:
             await init_beanie(
-                database=self.client[db_name], document_models=document_models
+                database=self.client[config.mongo.DATABASE],
+                document_models=document_models,
             )
             self.is_initialized = True
 
-        print(f"已连接至Mongo数据库: {db_name}，Beanie 初始化完成")
+        print(f"已连接至Mongo数据库: {config.mongo.DATABASE}，Beanie 初始化完成")
 
     async def disconnect(self):
         """关闭连接"""
@@ -60,12 +65,14 @@ class MSSQLServer:
         except Exception:
             return False
 
-    async def connect(self, connection_string: str):
+    async def connect(self, config: ProjectConfig):
         """连接数据库"""
-        print(f"正在连接MSSQLServer数据库: {connection_string}")
+        if not config.mssql:
+            raise ConnectionError("MySQL配置初始化失败")
+        print(f"正在连接MSSQLServer数据库: {config.mssql.mssql_uri}")
 
         self.engine = create_async_engine(
-            connection_string,
+            config.mssql.mssql_uri,
             echo=True,
             future=True,
             pool_size=20,
