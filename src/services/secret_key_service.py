@@ -1,6 +1,6 @@
 class ServerSecretKeyService:
     """用于系统层面的全局密钥管理，暂时使用静态示例"""
-    
+
     __publicKey: str = """-----BEGIN PUBLIC KEY-----
 MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEA1V9ipmjvhXI6lUBoOayH
 GEzAhQr0ZHNStzabCCpeL80uSbiZcxfxphjH0c+IvcPpImuIMozjgwAXldow3YOU
@@ -72,7 +72,7 @@ b7Wy4mwHXqkcJ/xISo0wZS6sJewAtd0=
     @classmethod
     def get_public_key(cls) -> str:
         return cls.__publicKey
-    
+
     @classmethod
     def get_private_key(cls) -> str:
         return cls.__privateKey

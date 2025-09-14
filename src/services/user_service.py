@@ -1,4 +1,4 @@
-from repo.repository import UserDAO, GroupDAO, LoginHistoryDAO
+from src.repo.repository import UserDAO, GroupDAO, LoginHistoryDAO
 
 class UserService:
 

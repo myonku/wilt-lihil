@@ -9,16 +9,19 @@ USER = "wilt"
 PASSWORD = "123456"
 DATABASE = "pec"
 DIRECTCONNECTION = true
-AUTHSOURCE = "admin"
+AUTHSOURCE = ""
 
 [lihil.sqlserver]
 DIALECT = "ms-sqlserver"
+DATASOURCE = "."
 HOST = "localhost"
+TRUSTEDCONNECTION = false
 PORT = 1433
 USER = "sa"
-PASSWORD = "*******"
+ENCRYPT = true
+PASSWORD = "******"
 DATABASE = "pec"
-Trusted_Connection = true
+TRUSTSERVERCERT = true
 
 [lihil.redis]
 DIALECT = "redis"

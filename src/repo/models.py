@@ -1,4 +1,5 @@
 from abc import abstractmethod
+import base64
 from datetime import datetime
 from enum import Enum as PyEnum
 from typing import Any, Literal
@@ -28,7 +29,6 @@ class TableBase(sa_orm.DeclarativeBase):
     gmt_created = Column(DateTime, server_default=func.now())
 
     Id: Any
-    
 
 
 # MongoDB 文档模型
@@ -95,13 +95,13 @@ class UserProfile(Document):
 
 
 # SQLAlchemy 表模型
-class UserRole(PyEnum, int):
+class UserRole(PyEnum):
     Admin = 1
     Examiner = 2
     Standard = 3
 
 
-class AccountStatus(PyEnum, int):
+class AccountStatus(PyEnum):
     Active = 1
     Restricted = 2
     Suspended = 3
@@ -120,20 +120,20 @@ class User(TableBase):
     __tablename__ = "users"
 
     Id: Mapped[UUID] = mapped_column(UNIQUEIDENTIFIER, primary_key=True, default=uuid4)
-    Name: Mapped[str] | None = mapped_column(String(100))
+    Name: Mapped[str | None] = mapped_column(String(100))
     Email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    AlterName: Mapped[str] | None = mapped_column(String(100))
-    PhoneNumber: Mapped[str] | None = mapped_column(String(20))
+    AlterName: Mapped[str | None] = mapped_column(String(100))
+    PhoneNumber: Mapped[str | None] = mapped_column(String(20))
     PasswordHash: Mapped[str] = mapped_column(String(255), nullable=False)  # argon2哈希
     PublicKey: Mapped[str] = mapped_column(Text, nullable=False)  # 持久公钥
     AccountStatus: Mapped["AccountStatus"] = mapped_column(
         SQLEnum(AccountStatus), default=AccountStatus.Restricted
     )
     Role: Mapped[UserRole] = mapped_column(SQLEnum(UserRole), default=UserRole.Standard)
-    LastUpdatePasswordAt: Mapped[datetime] | None = mapped_column(DateTime)
-    LastUpdateKeyAt: Mapped[datetime] | None = mapped_column(DateTime)
+    LastUpdatePasswordAt: Mapped[datetime | None] = mapped_column(DateTime)
+    LastUpdateKeyAt: Mapped[datetime | None] = mapped_column(DateTime)
     CreatedAt: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    LastLoginAt: Mapped[datetime] | None = mapped_column(DateTime)
+    LastLoginAt: Mapped[datetime | None] = mapped_column(DateTime)
     UpdatedAt: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
     )
@@ -159,7 +159,7 @@ class LoginHistory(TableBase):
         String(200), nullable=False
     )  # 哈希值
     IPAddress: Mapped[str] = mapped_column(String(45), nullable=False)
-    UserAgent: Mapped[str] | None = mapped_column(String(500))
+    UserAgent: Mapped[str | None] = mapped_column(String(500))
 
     # 关系
     User: Mapped["User"] = relationship("User", back_populates="login_histories")
@@ -170,7 +170,7 @@ class Group(TableBase):
 
     Id: Mapped[UUID] = mapped_column(UNIQUEIDENTIFIER, primary_key=True, default=uuid4)
     Name: Mapped[str] = mapped_column(String(100), nullable=False)
-    Description: Mapped[str] | None = mapped_column(String(500))
+    Description: Mapped[str | None] = mapped_column(String(500))
     CreatorId: Mapped[UUID] = mapped_column(UNIQUEIDENTIFIER, nullable=False)
     CreatedAt: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     UpdatedAt: Mapped[datetime] = mapped_column(
@@ -205,3 +205,81 @@ class Session(BaseModel):
     ServerEcdhPrivateKey: bytes | None = None
     ServerEcdhPublicKey: bytes | None = None
     ClientEcdhPublicKey: bytes | None = None
+
+    def session_to_dict(self) -> dict[str, str]:
+        """将 Session 对象转换为可序列化的字典"""
+        data = {
+            "SessionId": self.SessionId,
+            "CreatedAt": self.CreatedAt.isoformat(),
+            "ExpiredAt": self.ExpiredAt.isoformat(),
+            "UserId": self.UserId,
+            "ClientRandom": (
+                base64.b64encode(self.ClientRandom).decode("ascii")
+                if self.ClientRandom
+                else None
+            ),
+            "ServerRandom": base64.b64encode(self.ServerRandom).decode("ascii"),
+            "ServerEcdhPrivateKey": (
+                base64.b64encode(self.ServerEcdhPrivateKey).decode("ascii")
+                if self.ServerEcdhPrivateKey
+                else None
+            ),
+            "ServerEcdhPublicKey": (
+                base64.b64encode(self.ServerEcdhPublicKey).decode("ascii")
+                if self.ServerEcdhPublicKey
+                else None
+            ),
+            "ClientEcdhPublicKey": (
+                base64.b64encode(self.ClientEcdhPublicKey).decode("ascii")
+                if self.ClientEcdhPublicKey
+                else None
+            ),
+            "MasterKey": (
+                base64.b64encode(self.MasterKey).decode("ascii")
+                if self.MasterKey
+                else None
+            ),
+        }
+        return data
+
+    @classmethod
+    def dict_to_session(cls, data: dict[str, Any]):
+        """从字典创建 Session 对象"""
+        client_random = (
+            base64.b64decode(data["ClientRandom"]) if data.get("ClientRandom") else None
+        )
+        server_random = base64.b64decode(data["ServerRandom"])
+        server_private_key = (
+            base64.b64decode(data["ServerEcdhPrivateKey"])
+            if data.get("ServerEcdhPrivateKey")
+            else None
+        )
+        server_public_key = (
+            base64.b64decode(data["ServerEcdhPublicKey"])
+            if data.get("ServerEcdhPublicKey")
+            else None
+        )
+        client_public_key = (
+            base64.b64decode(data["ClientEcdhPublicKey"])
+            if data.get("ClientEcdhPublicKey")
+            else None
+        )
+        master_key = (
+            base64.b64decode(data["MasterKey"]) if data.get("MasterKey") else None
+        )
+
+        created_at = datetime.fromisoformat(data["CreatedAt"])
+        expired_at = datetime.fromisoformat(data["ExpiredAt"])
+
+        return cls(
+            SessionId=data["SessionId"],
+            CreatedAt=created_at,
+            ExpiredAt=expired_at,
+            UserId=data.get("UserId"),
+            ClientRandom=client_random,
+            ServerRandom=server_random,
+            ServerEcdhPrivateKey=server_private_key,
+            ServerEcdhPublicKey=server_public_key,
+            ClientEcdhPublicKey=client_public_key,
+            MasterKey=master_key,
+        )

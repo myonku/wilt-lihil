@@ -1,11 +1,12 @@
 from starlette.types import ASGIApp, Scope, Receive, Send
 from starlette.requests import Request
 from starlette.responses import JSONResponse
-from repo.redis_manager import SessionDAO
+from src.repo.redis_manager import SessionDAO
 
 
 class SessionMiddleware:
     """Session 合法性验证中间件"""
+
     def __init__(self, app: ASGIApp, session_dao: SessionDAO):
         self.app = app
         self.session_dao = session_dao
@@ -18,7 +19,7 @@ class SessionMiddleware:
 
         request = Request(scope, receive)
 
-        if self._is_handshake_init(request):
+        if self._is_open_upath(request):
             await self.app(scope, receive, send)
             return
 
@@ -43,10 +44,10 @@ class SessionMiddleware:
 
         await self.app(scope, receive, send)
 
-    def _is_handshake_init(self, request: Request) -> bool:
-        """检查是否是 handshake/init 路由"""
+    def _is_open_upath(self, request: Request) -> bool:
+        """检查是否是开放路由"""
         path = request.url.path
-        return path.endswith("/handshake/init") or "handshake/init" in path
+        return path.endswith(("/health", "/handshake/init", "/favicon.ico"))
 
 
 def session_middleware_factory(app: ASGIApp) -> ASGIApp:
@@ -66,7 +67,8 @@ def session_middleware_factory(app: ASGIApp) -> ASGIApp:
         async def __call__(self, scope, receive, send):
             if self._middleware is None:
                 # 延迟初始化
-                from repo.factory import redis
+                from src.repo.factory import redis
+
                 if not redis.is_initialized:
                     # 如果 Redis 未初始化，跳过 Session 验证
                     await self.app(scope, receive, send)

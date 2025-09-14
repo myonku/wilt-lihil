@@ -7,7 +7,7 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from crypto import CryptoUtils
+from src.crypto_utils.crypto import CryptoUtils
 
 
 class SessionCryptoUtils:
@@ -49,14 +49,13 @@ class SessionCryptoUtils:
         server_private_key: bytes, client_public_key_pem: str
     ) -> bytes:
         """
-        预主密钥派生
+        预主密钥派生 - 使用 HKDF
         """
         server_private = serialization.load_der_private_key(
             server_private_key, password=None, backend=default_backend()
         )
         client_pub_key_der = CryptoUtils.parse_pem(client_public_key_pem, "PUBLIC KEY")
 
-        # 加载客户端公钥
         client_public = serialization.load_der_public_key(
             client_pub_key_der, backend=default_backend()
         )
@@ -71,19 +70,18 @@ class SessionCryptoUtils:
                 "client_public_key must be an EC public key for ECDH exchange"
             )
 
-        # 计算共享密钥（使用SHA256哈希）
         shared_secret = server_private.exchange(ec.ECDH(), client_public)
 
-        # 使用HKDF进行密钥派生（更安全的方式）
-        derived_key = HKDF(
+        salt = b"\0" * 32  # 32 字节的全零数组
+        
+        # 使用 HKDF 进行密钥派生
+        return HKDF(
             algorithm=hashes.SHA256(),
             length=32,
-            salt=None,
+            salt=salt,
             info=b"ECDH key derivation",
             backend=default_backend(),
         ).derive(shared_secret)
-
-        return derived_key
 
     @staticmethod
     def derive_master_secret(
@@ -105,22 +103,41 @@ class SessionCryptoUtils:
     @staticmethod
     def encrypt_stream_with_symmetric_key(data: bytes, key: bytes) -> bytes:
         """
-        加密数据（字节流）- AES-GCM
+        加密数据（字节流）- AES-GCM（与C#和前端保持一致）
+        输出格式：IV (12字节) + Tag (16字节) + Ciphertext
         """
+        # 生成随机IV
         nonce = os.urandom(12)
+
+        # 创建AES-GCM实例
         aesgcm = AESGCM(key)
-        ciphertext = aesgcm.encrypt(nonce, data, None)
-        return nonce + ciphertext
+
+        # 加密数据（AESGCM.encrypt返回nonce + ciphertext + tag）
+        ciphertext_with_tag = aesgcm.encrypt(nonce, data, None)
+
+        # 分离密文和标签
+        ciphertext = ciphertext_with_tag[:-16]  # 去掉最后16字节（标签）
+        tag = ciphertext_with_tag[-16:]        # 最后16字节是标签
+
+        # 返回：IV + Tag + Ciphertext
+        return nonce + tag + ciphertext
 
     @staticmethod
     def decrypt_stream_with_symmetric_key(data: bytes, key: bytes) -> bytes:
         """
-        解密数据（字节流）- AES-GCM
+        解密数据（字节流）- AES-GCM（与C#和前端保持一致）
+        输入格式：IV (12字节) + Tag (16字节) + Ciphertext
         """
-        nonce = data[:12]
-        ciphertext = data[12:]
+        nonce = data[:12]        # 前12字节是IV
+        tag = data[12:28]        # 接下来16字节是Tag
+        ciphertext = data[28:]   # 剩余部分是密文
+
+        # 合并密文和标签（AESGCM期望的格式）
+        ciphertext_with_tag = ciphertext + tag
+
+        # 创建AES-GCM实例并解密
         aesgcm = AESGCM(key)
-        plaintext = aesgcm.decrypt(nonce, ciphertext, None)
+        plaintext = aesgcm.decrypt(nonce, ciphertext_with_tag, None)
 
         return plaintext
 

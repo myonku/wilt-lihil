@@ -1,10 +1,10 @@
-# from . import log_config  # 启用uvicorn内置日志系统
+from . import log_config  # 启用uvicorn内置日志系统，因为该项目采用了中间件记录日志，无需额外日志
 from typing import Literal
 from lihil import Lihil, Request, Response, Route
 from src.config import read_config
 from starlette.middleware.cors import CORSMiddleware
 from lihil.problems import problem_solver
-from repo.factory import (
+from src.repo.factory import (
     mongo,
     mssql,
     redis,
@@ -16,11 +16,12 @@ from repo.factory import (
     group_dao,
     login_history_dao,
 )
-from api.http_errors import InternalError
-from repo.redis_manager import RedisManager, session_dao
-from repo.db import MSSQLServer, MongoDB
-from repo.models import Review, ReviewFlow, ReviewStage, UserProfile
-from middlewares.session_middleware import session_middleware_factory
+from src.api.http_errors import InternalError
+from src.repo.redis_manager import RedisManager, SessionDAO, session_dao
+from src.repo.db import MSSQLServer, MongoDB
+from src.repo.models import Review, ReviewFlow, ReviewStage, UserProfile
+from src.middlewares.session_middleware import session_middleware_factory
+from src.api.handshake import handshake
 
 
 @problem_solver
@@ -40,7 +41,7 @@ async def lifespan(app: Lihil):
     app.graph.register_singleton(mongo, MongoDB)
     app.graph.register_singleton(mssql, MSSQLServer)
     app.graph.register_singleton(redis, RedisManager)
-
+    
     yield
 
     await redis.disconnect()
@@ -64,7 +65,7 @@ def app_factory() -> Lihil:
             session_dao,
         ],
     )
-    root.include_subroutes()
+    root.include_subroutes(handshake)
     root.sub("health").get(lambda: "ok")
 
     lhl = Lihil(root, app_config=app_config, lifespan=lifespan)

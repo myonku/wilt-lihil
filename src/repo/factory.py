@@ -4,10 +4,10 @@ from lihil.config import lhl_get_config
 from sqlalchemy.ext.asyncio import AsyncConnection
 from pymongo import AsyncMongoClient
 
-from config import ProjectConfig
-from repo.db import MongoDB, MSSQLServer
-from repo.redis_manager import RedisManager
-from repo.repository import (
+from src.config import ProjectConfig
+from src.repo.db import MongoDB, MSSQLServer
+from src.repo.redis_manager import RedisManager
+from src.repo.repository import (
     ReviewDAO,
     ReviewStageDAO,
     ReviewFlowDAO,
@@ -31,7 +31,7 @@ async def mongo_connection() -> AsyncGenerator[AsyncMongoClient, None]:
     if not await mongo.is_connected():
         if config.mongo is None:
             raise ConnectionError("Mongo配置初始化失败")
-        await mongo.connect(config.mongo.mongo_uri, config.mongo.DATABASE)
+        await mongo.connect(config)
 
     if mongo.client is None:
         raise RuntimeError("MongoDB client is not initialized")
@@ -65,9 +65,9 @@ async def mssql_connection() -> AsyncGenerator[AsyncConnection, None]:
     config = lhl_get_config(ProjectConfig)
 
     if not await mssql.is_connected():
-        if config.mssql is None:
+        if config.sqlserver is None:
             raise ConnectionError("MSSQL配置初始化失败")
-        await mssql.connect(config.mssql.mssql_uri)
+        await mssql.connect(config)
 
     if mssql.engine is None:
         raise RuntimeError("MSSQL engine is not initialized")

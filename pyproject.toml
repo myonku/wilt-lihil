@@ -5,11 +5,12 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "aioredis>=2.0.1",
+    "aioodbc>=0.5.0",
     "beanie>=2.0.0",
     "cryptography>=45.0.7",
     "lihil>=0.2.25",
-    "msgpack>=1.1.1",
+    "redis>=6.4.0",
+    "setuptools>=80.9.0",
     "sqlalchemy>=2.0.43",
     "uvicorn>=0.35.0",
 ]

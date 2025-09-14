@@ -6,14 +6,14 @@ from lihil import Param, Route, Annotated, status
 from lihil.plugins.premier import PremierPlugin
 from premier import Throttler
 import base64
-from crypto_utils.crypto import CryptoUtils
-from services.user_service import UserService
-from services.secret_key_service import ServerSecretKeyService
-from repo.redis_manager import SessionDAO
-from crypto_utils.session_crypto import SessionCryptoUtils
-from repo.models import Session
-from dto_models import HandShakeDTO
-from http_errors import InternalError
+from src.crypto_utils.crypto import CryptoUtils
+from src.services.user_service import UserService
+from src.services.secret_key_service import ServerSecretKeyService
+from src.repo.redis_manager import SessionDAO
+from src.crypto_utils.session_crypto import SessionCryptoUtils
+from src.repo.models import Session
+from src.api.dto_models import HandShakeDTO
+from src.api.http_errors import InternalError
 
 handshake = Route("handshake", deps=[UserService, SessionDAO])
 
@@ -39,8 +39,8 @@ async def init_handshake(
     await cache.set_session(session)
     server_public_key = ServerSecretKeyService.get_public_key()
     return {
-        "ServerPublicKey": server_public_key,
-        "ServerRandom": base64.b64encode(serverRandomBytes).decode("utf-8"),
+        "serverPublicKey": server_public_key,
+        "serverRandom": base64.b64encode(serverRandomBytes).decode("utf-8"),
     }
 
 
@@ -84,7 +84,7 @@ async def confirm_handshake(
 
     response_string = json.dumps({"EphPublicKey": eph_pub})
     response_with_timestamp = CryptoUtils.append_timestamp(response_string)
-    signature = CryptoUtils.sign_data(
+    signature = CryptoUtils.sign_origin_data(
         response_with_timestamp, ServerSecretKeyService.get_private_key()
     )
     signatured_data = CryptoUtils.append_signature(response_with_timestamp, signature)

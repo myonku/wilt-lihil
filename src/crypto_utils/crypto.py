@@ -4,7 +4,7 @@ import hashlib
 import io
 import re
 from collections.abc import Callable
-from typing import Literal
+from typing import Any, Literal
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -244,7 +244,7 @@ class CryptoUtils:
         decryptor = cipher.decryptor()
 
         CryptoUtils._process_symmetric(input_stream, output_stream, decryptor)
-
+    # endregion
     # region 核心处理逻辑
     @staticmethod
     def _process_asymmetric(
@@ -337,6 +337,7 @@ class CryptoUtils:
         )
         return f"-----BEGIN {header}-----\n{formatted_base64}\n-----END {header}-----"
 
+    # endregion
     # region 签名功能
 
     @staticmethod
@@ -347,7 +348,6 @@ class CryptoUtils:
         private_key = serialization.load_pem_private_key(
             private_key_pem.encode("utf-8"), password=None, backend=default_backend()
         )
-
         data_hash = CryptoUtils.compute_data_hash(data)
 
         # 使用PKCS1v15填充进行签名
@@ -356,6 +356,70 @@ class CryptoUtils:
         signature = private_key.sign(data_hash, padding.PKCS1v15(), hashes.SHA256())
 
         return base64.b64encode(signature).decode("utf-8")
+
+    @staticmethod
+    def sign_origin_data(data: str | io.IOBase, private_key_pem: str) -> str:
+        """
+        数据签名（支持字符串/流）
+        """
+        private_key = serialization.load_pem_private_key(
+            private_key_pem.encode("utf-8"), password=None, backend=default_backend()
+        )
+        
+        if isinstance(data, str):
+            data_bytes = data.encode("utf-8")
+        elif hasattr(data, "read"):
+            data_bytes = data.read()
+            if hasattr(data, "seek"):
+                data.seek(0)
+        else:
+            raise ValueError("不支持的数据格式。")
+        
+        if not isinstance(private_key, rsa.RSAPrivateKey):
+            raise TypeError("Provided private key is not an RSA private key.")
+        
+        signature = private_key.sign(
+            data_bytes,
+            padding.PKCS1v15(),
+            hashes.SHA256()
+        )
+        
+        return base64.b64encode(signature).decode("utf-8")
+    
+
+    @staticmethod
+    def verify_origin_data(data: str | io.IOBase, signature: str, public_key_pem: str) -> bool:
+        """
+        签名验证（支持字符串/流）
+        """
+        public_key = serialization.load_pem_public_key(
+            public_key_pem.encode("utf-8"), backend=default_backend()
+        )
+        
+        if isinstance(data, str):
+            data_bytes = data.encode("utf-8")
+        elif hasattr(data, "read"):
+            data_bytes = data.read()
+            if hasattr(data, "seek"):
+                data.seek(0)
+        else:
+            raise ValueError("不支持的数据格式。")
+        
+        signature_bytes = base64.b64decode(signature)
+        
+        if not isinstance(public_key, rsa.RSAPublicKey):
+            raise TypeError("Provided public key is not an RSA public key.")
+        
+        try:
+            public_key.verify(
+                signature_bytes, 
+                data_bytes, 
+                padding.PKCS1v15(), 
+                hashes.SHA256()
+            )
+            return True
+        except InvalidSignature:
+            return False
 
     @staticmethod
     def verify_data_without_signature(
@@ -381,7 +445,6 @@ class CryptoUtils:
         public_key = serialization.load_pem_public_key(
             public_key_pem.encode("utf-8"), backend=default_backend()
         )
-
         data_hash = CryptoUtils.compute_data_hash(data)
         signature_bytes = base64.b64decode(signature)
         if not isinstance(public_key, rsa.RSAPublicKey):
@@ -518,7 +581,7 @@ class CryptoUtils:
 
     # 辅助函数：计算流的哈希值
     @staticmethod
-    def compute_stream_hash(stream: io.IOBase, hasher: hashlib._Hash) -> bytes:
+    def compute_stream_hash(stream: io.IOBase, hasher: Any) -> bytes:
         """
         计算流的SHA256哈希值
         """

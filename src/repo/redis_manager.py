@@ -3,11 +3,10 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 import json
 from typing import Any
-from aioredis import Redis, from_url
-import msgpack
+from redis.asyncio import Redis, from_url
 
-from config import ProjectConfig
-from repo.models import Session
+from src.config import ProjectConfig
+from src.repo.models import Session
 
 
 class RedisManager:
@@ -41,7 +40,7 @@ class RedisManager:
         }
         default_kwargs.update(kwargs)
 
-        self.redis = await from_url(config.redis.redis_uri, **default_kwargs)
+        self.redis = from_url(config.redis.redis_uri, **default_kwargs)
         self.is_initialized = True
         print("Redis连接完成")
 
@@ -123,18 +122,25 @@ class SessionDAO(RedisBaseDAO):
         if expire_seconds <= 0:
             return False
 
-        session_bytes = msgpack.packb(session)
-        return await self.set(session.SessionId, session_bytes, expire)
+        session_data = json.dumps(session.session_to_dict())
+        return await self.set(
+            session.SessionId,
+            session_data,
+            expire,
+        )
 
     async def get_session(self, session_id: str) -> Session | None:
         """获取用户会话"""
-        session_bytes: bytes | None = await self.get(session_id)
+        session_data: str | bytes | None = await self.get(session_id)
 
-        if session_bytes is None:
+        if session_data is None:
             return None
 
         try:
-            return Session(**msgpack.unpackb(session_bytes))
+            if isinstance(session_data, (str, bytes)):
+                return Session.dict_to_session(json.loads(session_data))
+            else:
+                return Session.dict_to_session(session_data)
         except (ValueError, AttributeError, ImportError) as e:
             print(f"反序列化Session失败: {e}")
             return None

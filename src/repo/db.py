@@ -2,7 +2,7 @@ from beanie import init_beanie
 from pymongo import AsyncMongoClient
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine, AsyncConnection
 
-from config import ProjectConfig
+from src.config import ProjectConfig
 
 
 class MongoDB:
@@ -22,9 +22,7 @@ class MongoDB:
         except:
             return False
 
-    async def connect(
-        self, config: ProjectConfig, document_models: list | None = None
-    ):
+    async def connect(self, config: ProjectConfig, document_models: list | None = None):
         """连接数据库并初始化 Beanie"""
         if not config.mongo:
             raise ConnectionError("Mongo配置初始化失败")
@@ -67,12 +65,13 @@ class MSSQLServer:
 
     async def connect(self, config: ProjectConfig):
         """连接数据库"""
-        if not config.mssql:
+        if not config.sqlserver:
             raise ConnectionError("MySQL配置初始化失败")
-        print(f"正在连接MSSQLServer数据库: {config.mssql.mssql_uri}")
+        connection_str = config.sqlserver.mssql_uri
+        print(f"正在连接MSSQLServer数据库: {connection_str}")
 
         self.engine = create_async_engine(
-            config.mssql.mssql_uri,
+            connection_str,
             echo=True,
             future=True,
             pool_size=20,

@@ -29,24 +29,46 @@ class MongoConfig(ConfigBase, kw_only=True):
             params.append("directConnection=true")
 
         query = "?" + "&".join(params) if params else ""
-
         return f"mongodb://{user_part}{host_part}{port_part}/{db_name}{query}"
 
 
 class MSSQLConfig(ConfigBase, kw_only=True):
 
     DIALECT: str
-    USER: str
-    PORT: int
-    PASSWORD: str
-    HOST: str
+    DATASOURCE: str
+    USER: str | None = None
+    PORT: int | None = None
+    PASSWORD: str | None = None
+    HOST: str | None = None
     DATABASE: str
-    Trusted_Connection: bool
+    TRUSTSERVERCERT: bool | None = None
+    TRUSTEDCONNECTION: bool | None = None
+    ENCRYPT: bool | None = None
 
     @property
     def mssql_uri(self) -> str:
-        """生成通用的基本MS SQLServer连接URI"""
-        return f"Server={self.HOST};Database={self.DATABASE};User Id={self.USER};Password={self.PASSWORD};Port={self.PORT};Trusted_Connection={self.Trusted_Connection};"
+        """生成通用的基本MS SQLServer连接URI（优化拼接方式）"""
+        user_part = (
+            f"{self.USER}:{self.PASSWORD}@" if self.USER and self.PASSWORD else ""
+        )
+        datasource_part = self.DATASOURCE
+        db_name = self.DATABASE
+
+        params = []
+        params.append("driver=ODBC+Driver+17+for+SQL+Server")
+        if self.TRUSTEDCONNECTION is not None:
+            params.append(
+                f"trusted_connection={'yes' if self.TRUSTEDCONNECTION else 'no'}"
+            )
+        if self.ENCRYPT is not None:
+            params.append(f"encrypt={'yes' if self.ENCRYPT else 'no'}")
+        if self.TRUSTSERVERCERT is not None:
+            params.append(
+                f"trust_server_certificate={'yes' if self.TRUSTSERVERCERT else 'no'}"
+            )
+
+        query = "?" + "&".join(params) if params else ""
+        return f"mssql+aioodbc://{user_part}{datasource_part}/{db_name}{query}"
 
 
 class RedisConfig(ConfigBase, kw_only=True):
@@ -67,7 +89,7 @@ class ProjectConfig(AppConfig, kw_only=True):
 
     API_VERSION: str = "1"
     mongo: MongoConfig | None = None
-    mssql: MSSQLConfig | None = None
+    sqlserver: MSSQLConfig | None = None
     redis: RedisConfig | None = None
 
 

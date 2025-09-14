@@ -7,7 +7,7 @@ from pathlib import Path
 def setup_logging() -> logging.Logger:
     """配置日志系统"""
     try:
-        log_dir = Path("logs")
+        log_dir = Path("logs/server_logs")
         log_dir.mkdir(exist_ok=True, parents=True)
 
         logger = logging.getLogger()
