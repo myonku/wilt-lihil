@@ -12,7 +12,7 @@ from services.secret_key_service import ServerSecretKeyService
 from repo.redis_manager import SessionDAO
 from crypto_utils.session_crypto import SessionCryptoUtils
 from repo.models import Session
-from dto_models import HandShakeDTO
+from dto_models import EncryptedDataDTO
 from http_errors import InternalError
 
 download = Route("download", deps=[UserService, SessionDAO])

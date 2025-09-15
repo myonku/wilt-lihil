@@ -6,7 +6,6 @@ from typing import TypeVar, Generic
 from sqlalchemy import select, update, delete, insert
 import sqlalchemy
 from sqlalchemy.exc import SQLAlchemyError
-from uuid import UUID
 
 from src.repo.db import MSSQLServer
 from src.repo.models import (
@@ -25,19 +24,19 @@ T = TypeVar("T", bound=Document)
 V = TypeVar("V", bound=TableBase)
 
 
-class MongoBaseDAO:
+class MongoBaseDAO(Generic[T]):
     """基于 Beanie 的基础数据访问对象"""
 
     def __init__(self, document_model: type[T]):
         self.model = document_model
 
-    async def get(self, id: UUID) -> Document | None:
+    async def get(self, id: UUID) -> T | None:
         """根据 ID 获取文档"""
         return await self.model.get(id)
 
     async def get_many(
         self, ids: list[UUID] | None = None, skip: int = 0, limit: int = 100
-    ) -> list[Any]:
+    ) -> list[T]:
         """批量查询"""
         query = {}
         if ids:
@@ -49,7 +48,7 @@ class MongoBaseDAO:
         """创建文档"""
         return await document.insert()
 
-    async def update(self, id: UUID, update_data: BaseModel) -> Any:
+    async def update(self, id: UUID, update_data: BaseModel) -> T | None:
         """更新文档"""
         document = await self.get(id)
         if document:
@@ -65,6 +64,52 @@ class MongoBaseDAO:
             await document.delete()
             return True
         return False
+
+    async def get_many_by_field(
+        self, field_name: str, value: Any, exclude_fields: list[str] | None = None
+    ) -> list[T]:
+        """根据字段值查询多个文档"""
+        query = {field_name: value}
+        find_query = await self.model.find(query).to_list()
+        docs = []
+        for q in find_query:
+            doc = self.__project_attr(q, exclude_fields)
+            if doc is not None:
+                docs.append(doc)
+        return docs
+
+    async def get_with_projection(
+        self, doc_id: UUID, exclude_fields: list[str] | None = None
+    ) -> T | None:
+        """根据ID获取文档（带字段排除）"""
+        document = await self.model.get(doc_id)
+        return self.__project_attr(document, exclude_fields)
+
+    async def find_with_projection(
+        self, query: Any, exclude_fields: list[str] | None = None
+    ) -> list[T]:
+        """根据查询条件查找文档（带字段排除）"""
+        find_query = await self.model.find(query).to_list()
+        docs = []
+        for q in find_query:
+            doc = self.__project_attr(q, exclude_fields)
+            if doc is not None:
+                docs.append(doc)
+        return docs
+
+    async def count_documents(self, query: Any) -> int:
+        """计算满足查询条件的文档数量"""
+        return await self.model.find(query).count()
+    
+    def __project_attr(self, document: T | None, exclude_fields: list[str] | None) -> T | None:
+        if not document:
+            return None
+        if not exclude_fields:
+            return document
+        for field in exclude_fields:
+            if hasattr(document, field):
+                setattr(document, field, None)
+        return document
 
 
 class MSSQLBaseDAO(Generic[V]):
@@ -195,25 +240,25 @@ class MSSQLBaseDAO(Generic[V]):
                 raise e
 
 
-class ReviewFlowDAO(MongoBaseDAO):
+class ReviewFlowDAO(MongoBaseDAO[ReviewFlow]):
 
     def __init__(self):
         super().__init__(ReviewFlow)
 
 
-class ReviewStageDAO(MongoBaseDAO):
+class ReviewStageDAO(MongoBaseDAO[ReviewStage]):
 
     def __init__(self):
         super().__init__(ReviewStage)
 
 
-class ReviewDAO(MongoBaseDAO):
+class ReviewDAO(MongoBaseDAO[Review]):
 
     def __init__(self):
         super().__init__(Review)
 
 
-class ProfileDAO(MongoBaseDAO):
+class ProfileDAO(MongoBaseDAO[UserProfile]):
 
     def __init__(self):
         super().__init__(UserProfile)

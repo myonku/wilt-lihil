@@ -6,13 +6,14 @@ from lihil import Param, Route, Annotated, status
 from lihil.plugins.premier import PremierPlugin
 from premier import Throttler
 import base64
+
 from src.crypto_utils.crypto import CryptoUtils
 from src.services.user_service import UserService
 from src.services.secret_key_service import ServerSecretKeyService
 from src.repo.redis_manager import SessionDAO
 from src.crypto_utils.session_crypto import SessionCryptoUtils
 from src.repo.models import Session
-from src.api.dto_models import HandShakeDTO
+from src.api.dto_models import HandShakeInitDTO, EncryptedDataDTO
 from src.api.http_errors import InternalError
 
 handshake = Route("handshake", deps=[UserService, SessionDAO])
@@ -24,7 +25,7 @@ plugin = PremierPlugin(throttler=Throttler())
 async def init_handshake(
     cache: SessionDAO,
     session_id: Annotated[str, Param("header", alias="Session-Id")],
-    init_data: Annotated[HandShakeDTO.InitData, Param("body")],
+    init_data: Annotated[HandShakeInitDTO, Param("body")],
 ) -> Annotated[dict[str, str], status.OK]:
     """初始握手"""
     clientRandomBytes = base64.b64decode(init_data.clientRandom)
@@ -48,7 +49,7 @@ async def init_handshake(
 async def confirm_handshake(
     cache: SessionDAO,
     session_id: Annotated[str, Param("header", alias="Session-Id")],
-    confirm_data: Annotated[HandShakeDTO.ShakeData, Param("body")],
+    confirm_data: Annotated[EncryptedDataDTO, Param("body")],
 ) -> Annotated[str, status.OK]:
     """确认请求"""
     session = await cache.get_session(session_id)
@@ -96,7 +97,7 @@ async def confirm_handshake(
 async def establish_session(
     cache: SessionDAO,
     session_id: Annotated[str, Param("header", alias="Session-Id")],
-    establish_data: Annotated[HandShakeDTO.ShakeData, Param("body")],
+    establish_data: Annotated[EncryptedDataDTO, Param("body")],
 ) -> Annotated[str, status.OK]:
     """建立会话"""
     session = await cache.get_session(session_id)
@@ -151,7 +152,7 @@ async def establish_session(
 async def complete_handshake(
     cache: SessionDAO,
     session_id: Annotated[str, Param("header", alias="Session-Id")],
-    complete_data: Annotated[HandShakeDTO.ShakeData, Param("body")],
+    complete_data: Annotated[EncryptedDataDTO, Param("body")],
 ) -> Annotated[str, status.OK]:
     """最终确认"""
     session = await cache.get_session(session_id)

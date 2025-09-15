@@ -73,7 +73,7 @@ class SessionCryptoUtils:
         shared_secret = server_private.exchange(ec.ECDH(), client_public)
 
         salt = b"\0" * 32  # 32 字节的全零数组
-        
+
         # 使用 HKDF 进行密钥派生
         return HKDF(
             algorithm=hashes.SHA256(),
@@ -117,7 +117,7 @@ class SessionCryptoUtils:
 
         # 分离密文和标签
         ciphertext = ciphertext_with_tag[:-16]  # 去掉最后16字节（标签）
-        tag = ciphertext_with_tag[-16:]        # 最后16字节是标签
+        tag = ciphertext_with_tag[-16:]  # 最后16字节是标签
 
         # 返回：IV + Tag + Ciphertext
         return nonce + tag + ciphertext
@@ -128,9 +128,9 @@ class SessionCryptoUtils:
         解密数据（字节流）- AES-GCM（与C#和前端保持一致）
         输入格式：IV (12字节) + Tag (16字节) + Ciphertext
         """
-        nonce = data[:12]        # 前12字节是IV
-        tag = data[12:28]        # 接下来16字节是Tag
-        ciphertext = data[28:]   # 剩余部分是密文
+        nonce = data[:12]  # 前12字节是IV
+        tag = data[12:28]  # 接下来16字节是Tag
+        ciphertext = data[28:]  # 剩余部分是密文
 
         # 合并密文和标签（AESGCM期望的格式）
         ciphertext_with_tag = ciphertext + tag

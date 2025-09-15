@@ -1,4 +1,4 @@
-from . import log_config  # 启用uvicorn内置日志系统，因为该项目采用了中间件记录日志，无需额外日志
+from . import log_config  # 启用uvicorn内置日志系统，因为该项目采用了日志中间件，如果只需要接口日志，可以注释该行关闭服务日志
 from typing import Literal
 from lihil import Lihil, Request, Response, Route
 from src.config import read_config
@@ -17,7 +17,7 @@ from src.repo.factory import (
     login_history_dao,
 )
 from src.api.http_errors import InternalError
-from src.repo.redis_manager import RedisManager, SessionDAO, session_dao
+from src.repo.redis_manager import RedisManager, session_dao
 from src.repo.db import MSSQLServer, MongoDB
 from src.repo.models import Review, ReviewFlow, ReviewStage, UserProfile
 from src.middlewares.session_middleware import session_middleware_factory
@@ -33,7 +33,7 @@ async def lifespan(app: Lihil):
     config = read_config("settings.toml", ".env")
 
     await redis.connect(config)
-    await mssql.connect(config)
+    await mssql.connect(config, False, False)
     await mongo.connect(
         config,
         [ReviewStage, ReviewFlow, Review, UserProfile],

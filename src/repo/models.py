@@ -42,6 +42,12 @@ class ReviewFlow(Document):
     Completed: bool = False
     Description: str | None = None
 
+    @classmethod
+    def get_exclude_fields(cls) -> list[str]:
+        return [
+            "SignatureString",
+        ]
+
     class Settings:
         name = "reviewflow"
         use_state_management = True
@@ -63,6 +69,15 @@ class ReviewStage(Document):
     PassRecord: list[bool] | None = None
     Completed: bool = False
 
+    @classmethod
+    def get_exclude_fields(cls) -> list[str]:
+        return [
+            "SignatureString",
+            "EncryptedData",
+            "AuthorizedIds",
+            "EncryptedKeys",
+        ]
+
     class Settings:
         name = "reviewstage"
         use_state_management = True
@@ -78,6 +93,12 @@ class Review(Document):
     IsPassed: bool  # 意见标记
     SignatureString: str  # 发布者签名
     CreatedAt: datetime = Field(default_factory=datetime.now)
+
+    @classmethod
+    def get_exclude_fields(cls) -> list[str]:
+        return [
+            "SignatureString",
+        ]
 
     class Settings:
         name = "review"
@@ -152,7 +173,7 @@ class LoginHistory(TableBase):
 
     Id: Mapped[UUID] = mapped_column(UNIQUEIDENTIFIER, primary_key=True, default=uuid4)
     UserId: Mapped[UUID] = mapped_column(
-        UNIQUEIDENTIFIER, ForeignKey("users.id"), nullable=False
+        UNIQUEIDENTIFIER, ForeignKey("users.Id"), nullable=False
     )
     LoginTime: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     DeviceFingerprint: Mapped[str] = mapped_column(

@@ -1,4 +1,5 @@
 from lihil.config import AppConfig, ConfigBase, lhl_read_config
+import urllib.parse
 
 
 class MongoConfig(ConfigBase, kw_only=True):
@@ -47,24 +48,31 @@ class MSSQLConfig(ConfigBase, kw_only=True):
 
     @property
     def mssql_uri(self) -> str:
-        """生成通用的基本MS SQLServer连接URI（优化拼接方式）"""
+        """生成通用的基本MS SQLServer连接URI"""
         user_part = (
-            f"{self.USER}:{self.PASSWORD}@" if self.USER and self.PASSWORD else ""
+            f"{self.USER}:{urllib.parse.quote(self.PASSWORD)}@"
+            if self.USER and self.PASSWORD
+            else ""
         )
-        datasource_part = self.DATASOURCE
+        if self.DATASOURCE:
+            datasource_part = self.DATASOURCE
+        else:
+            datasource_part = (
+                f"{self.HOST}:{self.PORT}" if self.HOST and self.PORT else ""
+            )
         db_name = self.DATABASE
 
         params = []
-        params.append("driver=ODBC+Driver+17+for+SQL+Server")
+        params.append("driver=ODBC Driver 17 for SQL Server")
         if self.TRUSTEDCONNECTION is not None:
             params.append(
-                f"trusted_connection={'yes' if self.TRUSTEDCONNECTION else 'no'}"
+                f"Trusted_Connection={'yes' if self.TRUSTEDCONNECTION else 'no'}"
             )
         if self.ENCRYPT is not None:
-            params.append(f"encrypt={'yes' if self.ENCRYPT else 'no'}")
+            params.append(f"Encrypt={'yes' if self.ENCRYPT else 'no'}")
         if self.TRUSTSERVERCERT is not None:
             params.append(
-                f"trust_server_certificate={'yes' if self.TRUSTSERVERCERT else 'no'}"
+                f"TrustServerCertificate={'yes' if self.TRUSTSERVERCERT else 'no'}"
             )
 
         query = "?" + "&".join(params) if params else ""
