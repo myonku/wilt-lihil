@@ -1,13 +1,11 @@
-from typing import Any, TypeVar
 from beanie import Document
 from pydantic import BaseModel
 from uuid import UUID
-from typing import TypeVar, Generic
-from sqlalchemy import select, update, delete, insert
+from typing import TypeVar, Generic, Any
+from sqlalchemy import asc, desc, select, update, delete, insert
 import sqlalchemy
 from sqlalchemy.exc import SQLAlchemyError
-
-from src.repo.db import MSSQLServer
+from sqlalchemy.ext.asyncio import AsyncSession
 from src.repo.models import (
     Group,
     LoginHistory,
@@ -100,7 +98,7 @@ class MongoBaseDAO(Generic[T]):
     async def count_documents(self, query: Any) -> int:
         """计算满足查询条件的文档数量"""
         return await self.model.find(query).count()
-    
+
     def __project_attr(self, document: T | None, exclude_fields: list[str] | None) -> T | None:
         if not document:
             return None
@@ -115,129 +113,145 @@ class MongoBaseDAO(Generic[T]):
 class MSSQLBaseDAO(Generic[V]):
     """基于 SQLAlchemy 的基础数据访问对象"""
 
-    def __init__(self, model: type[V], sql_db: MSSQLServer):
+    def __init__(self, model: type[V]):
         self.model = model
-        self.sql_db = sql_db
 
-    async def _execute(self, sql, **kwargs) -> Any:
-        """执行 SQL 语句的通用方法"""
-        async with await self.sql_db.get_connection() as conn:
-            try:
-                result = await conn.execute(sql, **kwargs)
-                await conn.commit()
-                return result
-            except SQLAlchemyError as e:
-                await conn.rollback()
-                raise e
-
-    async def get(self, id: UUID) -> V | None:
+    async def get(self, id: UUID, session: AsyncSession) -> V | None:
         """根据 ID 获取记录"""
-        async with await self.sql_db.get_connection() as conn:
-            try:
-                sql = select(self.model).where(self.model.Id == id)
-                result = await conn.execute(sql)
-                return result.scalar_one_or_none()
-            except SQLAlchemyError as e:
-                await conn.rollback()
-                raise e
+        try:
+            sql = select(self.model).where(self.model.Id == id)
+            result = await session.execute(sql)
+            return result.scalar_one_or_none()
+        except SQLAlchemyError as e:
+            await session.rollback()
+            raise e
 
     async def get_many(
         self,
+        session: AsyncSession,
         ids: list[UUID] | None = None,
         skip: int = 0,
         limit: int = 100,
+        order_by: dict | None = None,
         **filters,
     ) -> list[V]:
         """批量查询"""
-        async with await self.sql_db.get_connection() as conn:
-            try:
-                sql = select(self.model)
+        try:
+            sql = select(self.model)
 
-                if ids:
-                    sql = sql.where(self.model.Id.in_(ids))
+            if ids:
+                sql = sql.where(self.model.Id.in_(ids))
 
-                for key, value in filters.items():
-                    if hasattr(self.model, key):
-                        sql = sql.where(getattr(self.model, key) == value)
+            for key, value in filters.items():
+                if hasattr(self.model, key):
+                    sql = sql.where(getattr(self.model, key) == value)
 
-                sql = sql.offset(skip).limit(limit)
+            if order_by:
+                order_clauses = []
+                for column_name, direction in order_by.items():
+                    if hasattr(self.model, column_name):
+                        column = getattr(self.model, column_name)
+                        if direction.lower() == "desc":
+                            order_clauses.append(desc(column))
+                        else:
+                            order_clauses.append(asc(column))
+                if order_clauses:
+                    sql = sql.order_by(*order_clauses)
+            else:
+                sql = sql.order_by(self.model.Id.asc())
 
-                result = await conn.execute(sql)
-                return [self.model(**u) for u in result.mappings().fetchall()]
-            except SQLAlchemyError as e:
-                await conn.rollback()
-                raise e
+            sql = sql.offset(skip).limit(limit)
 
-    async def create(self, instance: V) -> UUID:
+            result = await session.execute(sql)
+            return [self.model(**u) for u in result.mappings().fetchall()]
+        except SQLAlchemyError as e:
+            await session.rollback()
+            raise e
+
+    async def create(self, instance: V, session: AsyncSession) -> UUID:
         """创建记录"""
-        async with await self.sql_db.get_connection() as conn:
-            try:
-                result = await conn.execute(
-                    insert(self.model)
-                    .values(instance.__dict__)
-                    .returning(self.model.Id)
-                )
-                return result.scalar_one()
-            except SQLAlchemyError as e:
-                await conn.rollback()
-                raise e
+        try:
+            insert_data = {}
+            for column in self.model.__table__.columns:
+                column_name = column.name
+                if hasattr(instance, column_name):
+                    value = getattr(instance, column_name)
+                    if value is not None:
+                        insert_data[column_name] = value
 
-    async def update(self, id: UUID, update_data: dict) -> V | None:
+            result = await session.execute(
+                insert(self.model).values(**insert_data).returning(self.model.Id)
+            )
+            created_id = result.scalar_one()
+
+            await session.flush()
+            return created_id
+
+        except SQLAlchemyError as e:
+            await session.rollback()
+            raise e
+
+    async def update(
+        self, id: UUID, update_data: dict, session: AsyncSession
+    ) -> V | None:
         """更新记录"""
-        async with await self.sql_db.get_connection() as conn:
-            try:
-                sql = select(self.model).where(self.model.Id == id)
-                result = await conn.execute(sql)
-                instance = result.scalar_one_or_none()
+        try:
+            sql = select(self.model).where(self.model.Id == id)
+            result = await session.execute(sql)
+            instance = result.scalar_one_or_none()
 
-                if not instance:
-                    return None
+            if not instance:
+                return None
 
-                for key, value in update_data.items():
-                    if hasattr(instance, key):
-                        setattr(instance, key, value)
+            valid_update_data = {}
+            for key, value in update_data.items():
+                if hasattr(self.model, key) and key in self.model.__table__.columns:
+                    valid_update_data[key] = value
+                    setattr(instance, key, value)
 
-                await conn.execute(
-                    update(self.model).where(self.model.Id == id).values(**update_data)
+            if valid_update_data:
+                await session.execute(
+                    update(self.model)
+                    .where(self.model.Id == id)
+                    .values(**valid_update_data)
                 )
-                return instance
-            except SQLAlchemyError as e:
-                await conn.rollback()
-                raise e
 
-    async def delete(self, id: UUID) -> bool:
+            return instance
+        except SQLAlchemyError as e:
+            await session.rollback()
+            raise e
+
+    async def delete(self, id: UUID, session: AsyncSession) -> bool:
         """删除记录"""
-        async with await self.sql_db.get_connection() as conn:
-            try:
-                sql = select(self.model).where(self.model.Id == id)
-                result = await conn.execute(sql)
-                instance = result.scalar_one_or_none()
+        try:
+            sql = select(self.model).where(self.model.Id == id)
+            result = await session.execute(sql)
+            instance = result.scalar_one_or_none()
 
-                if not instance:
-                    return False
+            if not instance:
+                return False
 
-                await conn.execute(delete(self.model).where(self.model.Id == id))
-                return True
-            except SQLAlchemyError as e:
-                await conn.rollback()
-                raise e
+            await session.execute(delete(self.model).where(self.model.Id == id))
+            return True
+        except SQLAlchemyError as e:
+            await session.rollback()
+            raise e
 
-    async def count(self, **filters) -> int:
+    async def count(self, session: AsyncSession, **filters) -> int:
         """统计记录数量"""
-        async with await self.sql_db.get_connection() as conn:
-            try:
-                sql = select(self.model)
-                for key, value in filters.items():
-                    if hasattr(self.model, key):
-                        sql = sql.where(getattr(self.model, key) == value)
+        try:
+            sql = select(self.model)
+            for key, value in filters.items():
+                if hasattr(self.model, key):
+                    sql = sql.where(getattr(self.model, key) == value)
 
-                result = await conn.execute(
-                    select(sqlalchemy.func.count()).select_from(sql.subquery())
-                )
-                return result.scalar_one()
-            except SQLAlchemyError as e:
-                await conn.rollback()
-                raise e
+            result = await session.execute(
+                select(sqlalchemy.func.count()).select_from(sql.subquery())
+            )
+            return result.scalar_one()
+        except SQLAlchemyError as e:
+            await session.rollback()
+            raise e
 
 
 class ReviewFlowDAO(MongoBaseDAO[ReviewFlow]):
@@ -266,17 +280,17 @@ class ProfileDAO(MongoBaseDAO[UserProfile]):
 
 class UserDAO(MSSQLBaseDAO[User]):
 
-    def __init__(self, sql_db: MSSQLServer):
-        super().__init__(User, sql_db)
+    def __init__(self):
+        super().__init__(User)
 
 
 class GroupDAO(MSSQLBaseDAO[Group]):
 
-    def __init__(self, sql_db: MSSQLServer):
-        super().__init__(Group, sql_db)
+    def __init__(self):
+        super().__init__(Group)
 
 
 class LoginHistoryDAO(MSSQLBaseDAO[LoginHistory]):
 
-    def __init__(self, sql_db: MSSQLServer):
-        super().__init__(LoginHistory, sql_db)
+    def __init__(self):
+        super().__init__(LoginHistory)

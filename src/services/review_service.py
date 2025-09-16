@@ -14,13 +14,13 @@ class ReviewService:
     def __init__(
         self,
         review_dao: ReviewDAO,
-        review_stage_dao: ReviewStageDAO,
-        review_flow_dao: ReviewFlowDAO,
+        stage_dao: ReviewStageDAO,
+        flow_dao: ReviewFlowDAO,
         profile_dao: ProfileDAO,
     ):
         self.review_dao = review_dao
-        self.review_stage_dao = review_stage_dao
-        self.review_flow_dao = review_flow_dao
+        self.stage_dao = stage_dao
+        self.flow_dao = flow_dao
         self.profile_dao = profile_dao
 
     async def get_all_reviews_by_user_id(self, user_id: UUID) -> list[Review] | None:
@@ -38,52 +38,52 @@ class ReviewService:
     async def get_all_reviews_by_flow_id(self, flow_id: UUID) -> list[Review] | None:
         """获取审核流的所有批注（排除签名字段）"""
         return await self.review_dao.get_many_by_field(
-            "final_BelongId", flow_id, Review.get_exclude_fields()
+            "FinalBelongId", flow_id, Review.get_exclude_fields()
         )
 
     async def add_review_async(self, review: Review) -> None:
         """添加批注"""
         await self.review_dao.create(review)
 
-    async def get_all_review_stage_by_flow_id_async(
+    async def get_all_stage_by_flow_id_async(
         self, flow_id: UUID
     ) -> list[ReviewStage]:
         """获取审核流的所有阶段（排除敏感字段）"""
-        return await self.review_stage_dao.get_many_by_field(
+        return await self.stage_dao.get_many_by_field(
             "BelongId", flow_id, ReviewStage.get_exclude_fields()
         )
 
-    async def get_all_review_stage_by_user_id_async(
+    async def get_all_stage_by_user_id_async(
         self, user_id: UUID
     ) -> list[ReviewStage]:
         """获取用户创建的所有阶段（排除敏感字段）"""
-        return await self.review_stage_dao.get_many_by_field(
+        return await self.stage_dao.get_many_by_field(
             "PublisherId", user_id, ReviewStage.get_exclude_fields()
         )
 
     async def get_stages_by_user_id(self, user_id: UUID) -> list[ReviewStage]:
         """获取用户有权限访问的所有阶段（排除敏感字段）"""
         query = ElemMatch(ReviewStage.AuthorizedIds, {"$eq": user_id})
-        return await self.review_stage_dao.find_with_projection(
+        return await self.stage_dao.find_with_projection(
             query, ReviewStage.get_exclude_fields()
         )
 
-    async def get_all_review_stage_count_by_user_id_async(
+    async def get_all_stage_count_by_user_id_async(
         self, user_id: UUID, completed: bool = False
     ) -> int:
         """获取用户创建阶段的计数"""
         query = And(
             Eq(ReviewStage.PublisherId, user_id), Eq(ReviewStage.Completed, completed)
         )
-        return await self.review_stage_dao.count_documents(query)
+        return await self.stage_dao.count_documents(query)
 
-    async def add_review_stage_async(self, stage: ReviewStage) -> None:
+    async def add_stage_async(self, stage: ReviewStage) -> None:
         """添加审核阶段"""
-        await self.review_stage_dao.create(stage)
+        await self.stage_dao.create(stage)
 
     async def add_stage_pass_record(self, stage_id: UUID, passed: bool) -> None:
         """添加阶段通过记录"""
-        stage = await self.review_stage_dao.get(stage_id)
+        stage = await self.stage_dao.get(stage_id)
         if stage:
             if not hasattr(stage, "PassRecord") or stage.PassRecord is None:
                 stage.PassRecord = []
@@ -92,7 +92,7 @@ class ReviewService:
 
     async def set_stage_pass(self, stage_id: UUID, passed: bool) -> None:
         """设置阶段通过状态"""
-        stage = await self.review_stage_dao.get(stage_id)
+        stage = await self.stage_dao.get(stage_id)
         if stage:
             stage.Completed = passed
             await stage.save()
@@ -107,28 +107,49 @@ class ReviewService:
             Eq(ReviewStage.Id, stage_id),
             ElemMatch(ReviewStage.AuthorizedIds, {"$eq": user_id}),
         )
-        count = await self.review_stage_dao.count_documents(query)
+        count = await self.stage_dao.count_documents(query)
         return count > 0
 
     async def get_file_data(self, stage_id: UUID) -> ReviewStage | None:
         """获取文件数据（包括所有敏感字段）"""
-        return await self.review_stage_dao.get(stage_id)
+        return await self.stage_dao.get(stage_id)
 
     async def add_flow_async(self, flow: ReviewFlow) -> None:
         """添加审核流"""
-        await self.review_flow_dao.create(flow)
+        await self.flow_dao.create(flow)
 
     async def get_flow_by_id_async(self, flow_id: UUID) -> ReviewFlow | None:
         """根据ID获取审核流（排除签名字段）"""
-        return await self.review_flow_dao.get_with_projection(
+        return await self.flow_dao.get_with_projection(
             flow_id, ReviewFlow.get_exclude_fields()
         )
+
+    async def get_flow_by_user_id(self, user_id: UUID) -> list[ReviewFlow]:
+        """根据用户ID获取评审流"""
+        return await self.flow_dao.get_many_by_field("OwnerId", user_id)
+
+    async def get_stage_by_user_id(self, user_id: UUID) -> list[ReviewStage]:
+        """根据用户ID获取评审阶段"""
+        return await self.stage_dao.get_many_by_field("PublisherId", user_id)
+
+    async def get_all_flow_stage_by_flow_id(self, flow_id: UUID) -> list[ReviewStage]:
+        """根据流程ID获取所有阶段"""
+        return await self.stage_dao.get_many_by_field("BelongId", flow_id)
+
+    async def get_review_by_stage_id(self, stage_id: UUID) -> list[Review]:
+        """根据阶段ID获取评审记录"""
+        return await self.review_dao.get_many_by_field("BelongId", stage_id)
+
+    async def add_review(self, review: Review) -> UUID:
+        """添加评审记录"""
+        result = await self.review_dao.create(review)
+        return result.Id
 
     async def get_all_flows_by_user_id_async(
         self, user_id: UUID
     ) -> list[ReviewFlow] | None:
         """获取用户的所有审核流（排除签名字段）"""
-        return await self.review_flow_dao.get_many_by_field(
+        return await self.flow_dao.get_many_by_field(
             "OwnerId", user_id, ReviewFlow.get_exclude_fields()
         )
 
@@ -139,12 +160,12 @@ class ReviewService:
         query = And(
             Eq(ReviewFlow.OwnerId, user_id), Eq(ReviewFlow.Completed, completed)
         )
-        return await self.review_flow_dao.count_documents(query)
+        return await self.flow_dao.count_documents(query)
 
     # 杂项方法
     async def get_all_reviews_count_by_user_flows_async(self, user_id: UUID) -> int:
         """获取用户所有审核流中最近一周的批注数量"""
-        flows = await self.review_flow_dao.get_many_by_field("OwnerId", user_id)
+        flows = await self.flow_dao.get_many_by_field("OwnerId", user_id)
         flow_ids = [flow.id for flow in flows] if flows else []
 
         if not flow_ids:

@@ -2,7 +2,7 @@ from datetime import datetime
 import datetime as dt
 import json
 import re
-from lihil import Form, Param, Route, Annotated, status
+from lihil import Param, Route, Annotated, status
 from lihil.plugins.premier import PremierPlugin
 from premier import Throttler
 
@@ -12,7 +12,7 @@ from src.crypto_utils.session_crypto import SessionCryptoUtils
 from src.api.http_errors import InternalError
 from src.services.user_service import UserService
 from src.repo.redis_manager import SessionDAO
-from src.api.dto_models import EncryptedDataDTO
+from src.api.dto_models import plain_text_decoder
 
 
 auth = Route("auth", deps=[UserService, SessionDAO])
@@ -23,18 +23,17 @@ plugin = PremierPlugin(throttler=Throttler())
 @auth.sub("login").post(plugins=[plugin.fix_window(10, 1)])
 async def login(
     user_service: UserService,
-    cache: SessionDAO,
+    session_dao: SessionDAO,
     session_id: Annotated[str, Param("header", alias="Session-Id")],
-    login_data: Annotated[EncryptedDataDTO, Param("body")],
+    login_data: Annotated[str, Param("body", decoder=plain_text_decoder)],
 ) -> Annotated[str, status.OK]:
     """用户登录"""
-    session = await cache.get_session(session_id)
+    session = await session_dao.get_session(session_id)
     assert session is not None and session.MasterKey is not None
-    encrypted_data = login_data.data
     master_key = session.MasterKey
 
     valid, decrypted_data = SessionCryptoUtils.decrypt_and_validate_timestamp(
-        encrypted_data, master_key
+        login_data, master_key
     )
     if not valid:
         raise InternalError("Invalid timestamp")
@@ -43,10 +42,8 @@ async def login(
     password = data_json.get("password")
     if not email or not password:
         raise InternalError("Email and password are required")
-    user_is_valid = await user_service.authenticate_user(email, password)
-    if user_is_valid:
-        user = await user_service.get_user_by_email(email)
-        assert user is not None
+    user_is_valid, user = await user_service.authenticate_user(email, password)
+    if user_is_valid and user is not None:
         newest_login_history = await user_service.get_newest_login_history(user.Id)
         await user_service.update_user(
             user.Id,
@@ -63,7 +60,7 @@ async def login(
         session.UserId = str(user.Id)
         session.CreatedAt = datetime.now()
         session.ExpiredAt = datetime.now() + dt.timedelta(hours=1)
-        await cache.set_session(session)
+        await session_dao.set_session(session)
     else:
         user = None
     response = {
@@ -78,18 +75,17 @@ async def login(
 @auth.sub("register").post(plugins=[plugin.fix_window(5, 1)])
 async def register(
     user_service: UserService,
-    cache: SessionDAO,
+    session_dao: SessionDAO,
     session_id: Annotated[str, Param("header", alias="Session-Id")],
-    register_data: Annotated[EncryptedDataDTO, Param("body")],
+    register_data: Annotated[str, Param("body", decoder=plain_text_decoder)],
 ) -> Annotated[str, status.OK]:
     """用户注册"""
-    session = await cache.get_session(session_id)
+    session = await session_dao.get_session(session_id)
     assert session is not None and session.MasterKey is not None
-    encrypted_data = register_data.data
     master_key = session.MasterKey
 
     valid, decrypted_data = SessionCryptoUtils.decrypt_and_validate_timestamp(
-        encrypted_data, master_key
+        register_data, master_key
     )
     if not valid:
         raise InternalError("Invalid timestamp")
@@ -125,18 +121,19 @@ async def register(
 @auth.sub("check-email").post(plugins=[plugin.fix_window(10, 1)])
 async def check_email(
     user_service: UserService,
-    cache: SessionDAO,
+    session_dao: SessionDAO,
     session_id: Annotated[str, Param("header", alias="Session-Id")],
-    check_email_data: Annotated[EncryptedDataDTO, Param("body")],
+    check_email_data: Annotated[
+        str, Param("body", decoder=plain_text_decoder)
+    ],
 ) -> Annotated[str, status.OK]:
     """检查邮箱是否已注册"""
-    session = await cache.get_session(session_id)
+    session = await session_dao.get_session(session_id)
     assert session is not None and session.MasterKey is not None
-    encrypted_data = check_email_data.data
     master_key = session.MasterKey
 
     valid, decrypted_data = SessionCryptoUtils.decrypt_and_validate_timestamp(
-        encrypted_data, master_key
+        check_email_data, master_key
     )
     if not valid:
         raise InternalError("Invalid timestamp")

@@ -7,15 +7,6 @@ from pymongo import AsyncMongoClient
 from src.config import ProjectConfig
 from src.repo.db import MongoDB, MSSQLServer
 from src.repo.redis_manager import RedisManager
-from src.repo.repository import (
-    ReviewDAO,
-    ReviewStageDAO,
-    ReviewFlowDAO,
-    ProfileDAO,
-    UserDAO,
-    GroupDAO,
-    LoginHistoryDAO,
-)
 
 
 mongo = MongoDB()
@@ -40,26 +31,6 @@ async def mongo_connection() -> AsyncGenerator[AsyncMongoClient, None]:
 
 
 @asynccontextmanager
-async def review_dao() -> AsyncGenerator[ReviewDAO, None]:
-    yield ReviewDAO()
-
-
-@asynccontextmanager
-async def review_stage_dao() -> AsyncGenerator[ReviewStageDAO, None]:
-    yield ReviewStageDAO()
-
-
-@asynccontextmanager
-async def review_flow_dao() -> AsyncGenerator[ReviewFlowDAO, None]:
-    yield ReviewFlowDAO()
-
-
-@asynccontextmanager
-async def profile_dao() -> AsyncGenerator[ProfileDAO, None]:
-    yield ProfileDAO()
-
-
-@asynccontextmanager
 async def mssql_connection() -> AsyncGenerator[AsyncConnection, None]:
     """原生连接支持，仅用于特殊情况"""
     config = lhl_get_config(ProjectConfig)
@@ -73,18 +44,3 @@ async def mssql_connection() -> AsyncGenerator[AsyncConnection, None]:
         raise RuntimeError("MSSQL engine is not initialized")
 
     yield mssql.engine.connect()
-
-
-@asynccontextmanager
-async def user_dao(db: MSSQLServer) -> AsyncGenerator[UserDAO, None]:
-    yield UserDAO(db)
-
-
-@asynccontextmanager
-async def group_dao(db: MSSQLServer) -> AsyncGenerator[GroupDAO, None]:
-    yield GroupDAO(db)
-
-
-@asynccontextmanager
-async def login_history_dao(db: MSSQLServer) -> AsyncGenerator[LoginHistoryDAO, None]:
-    yield LoginHistoryDAO(db)

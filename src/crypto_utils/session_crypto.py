@@ -100,11 +100,11 @@ class SessionCryptoUtils:
         # 3. 取前32字节作为AES密钥
         return hash_result[:32]
 
+
     @staticmethod
     def encrypt_stream_with_symmetric_key(data: bytes, key: bytes) -> bytes:
         """
-        加密数据（字节流）- AES-GCM（与C#和前端保持一致）
-        输出格式：IV (12字节) + Tag (16字节) + Ciphertext
+        加密数据（字节流）- AES-GCM（与前端保持一致：IV + Tag + Ciphertext）
         """
         # 生成随机IV
         nonce = os.urandom(12)
@@ -112,27 +112,28 @@ class SessionCryptoUtils:
         # 创建AES-GCM实例
         aesgcm = AESGCM(key)
 
-        # 加密数据（AESGCM.encrypt返回nonce + ciphertext + tag）
+        # 加密数据
         ciphertext_with_tag = aesgcm.encrypt(nonce, data, None)
 
-        # 分离密文和标签
+        # 分离nonce、ciphertext和tag
+        # AESGCM.encrypt返回的是 ciphertext + tag
         ciphertext = ciphertext_with_tag[:-16]  # 去掉最后16字节（标签）
         tag = ciphertext_with_tag[-16:]  # 最后16字节是标签
 
-        # 返回：IV + Tag + Ciphertext
+        # 返回：IV + Tag + Ciphertext（与前端一致）
         return nonce + tag + ciphertext
+
 
     @staticmethod
     def decrypt_stream_with_symmetric_key(data: bytes, key: bytes) -> bytes:
         """
-        解密数据（字节流）- AES-GCM（与C#和前端保持一致）
-        输入格式：IV (12字节) + Tag (16字节) + Ciphertext
+        解密数据（字节流）- AES-GCM（与前端保持一致：IV + Tag + Ciphertext）
         """
         nonce = data[:12]  # 前12字节是IV
         tag = data[12:28]  # 接下来16字节是Tag
         ciphertext = data[28:]  # 剩余部分是密文
 
-        # 合并密文和标签（AESGCM期望的格式）
+        # 重组为AESGCM期望的格式：ciphertext + tag
         ciphertext_with_tag = ciphertext + tag
 
         # 创建AES-GCM实例并解密

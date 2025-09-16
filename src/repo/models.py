@@ -137,6 +137,24 @@ user_group_association = Table(
 )
 
 
+class Group(TableBase):
+    __tablename__ = "groups"
+
+    Id: Mapped[UUID] = mapped_column(UNIQUEIDENTIFIER, primary_key=True, default=uuid4)
+    Name: Mapped[str] = mapped_column(String(100), nullable=False)
+    Description: Mapped[str | None] = mapped_column(String(500))
+    CreatorId: Mapped[UUID] = mapped_column(UNIQUEIDENTIFIER, nullable=False)
+    CreatedAt: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    UpdatedAt: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+    # 关系
+    Users: Mapped[list["User"]] = relationship(
+        "User", secondary=user_group_association, back_populates="Groups"
+    )
+
+
 class User(TableBase):
     __tablename__ = "users"
 
@@ -161,10 +179,10 @@ class User(TableBase):
 
     # 关系
     Groups: Mapped[list["Group"]] = relationship(
-        "Group", secondary=user_group_association, back_populates="users"
+        "Group", secondary=user_group_association, back_populates="Users"
     )
     LoginHistories: Mapped[list["LoginHistory"]] = relationship(
-        "LoginHistory", back_populates="user"
+        "LoginHistory", back_populates="User"
     )
 
 
@@ -183,31 +201,13 @@ class LoginHistory(TableBase):
     UserAgent: Mapped[str | None] = mapped_column(String(500))
 
     # 关系
-    User: Mapped["User"] = relationship("User", back_populates="login_histories")
-
-
-class Group(TableBase):
-    __tablename__ = "groups"
-
-    Id: Mapped[UUID] = mapped_column(UNIQUEIDENTIFIER, primary_key=True, default=uuid4)
-    Name: Mapped[str] = mapped_column(String(100), nullable=False)
-    Description: Mapped[str | None] = mapped_column(String(500))
-    CreatorId: Mapped[UUID] = mapped_column(UNIQUEIDENTIFIER, nullable=False)
-    CreatedAt: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    UpdatedAt: Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.now(), onupdate=func.now()
-    )
-
-    # 关系
-    Users: Mapped[list["User"]] = relationship(
-        "User", secondary=user_group_association, back_populates="groups"
-    )
+    User: Mapped["User"] = relationship("User", back_populates="LoginHistories")
 
 
 # 非数据库模型（用于业务逻辑）
 class LogRecord(BaseModel):
     StartTime: datetime
-    EndTime: datetime
+    EndTime: datetime | None = None
     UserId: str | None = None
     Path: str
     Status: Literal["Success", "Error"] | None = None

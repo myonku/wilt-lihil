@@ -1,7 +1,7 @@
 from beanie import init_beanie
 from pymongo import AsyncMongoClient
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine, AsyncConnection
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine, AsyncSession
 
 from src.config import ProjectConfig
 from src.repo.models import TableBase
@@ -101,11 +101,11 @@ class MSSQLServer:
             self.engine = None
             self.is_initialized = False
 
-    async def get_connection(self) -> AsyncConnection:
-        """获取数据库连接"""
+    def get_session(self) -> AsyncSession:
+        """获取新的AsyncSession"""
         if self.engine is None:
             raise RuntimeError("数据库引擎未初始化")
-        return await self.engine.connect()
+        return AsyncSession(self.engine, expire_on_commit=False)
 
     async def create_tables(self):
         """创建所有数据库表"""

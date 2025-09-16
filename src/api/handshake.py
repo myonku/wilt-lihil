@@ -23,7 +23,7 @@ plugin = PremierPlugin(throttler=Throttler())
 
 @handshake.sub("init").post(plugins=[plugin.fix_window(10, 1)])
 async def init_handshake(
-    cache: SessionDAO,
+    session_dao: SessionDAO,
     session_id: Annotated[str, Param("header", alias="Session-Id")],
     init_data: Annotated[HandShakeInitDTO, Param("body")],
 ) -> Annotated[dict[str, str], status.OK]:
@@ -37,7 +37,7 @@ async def init_handshake(
         ServerRandom=serverRandomBytes,
         ClientRandom=clientRandomBytes,
     )
-    await cache.set_session(session)
+    await session_dao.set_session(session)
     server_public_key = ServerSecretKeyService.get_public_key()
     return {
         "serverPublicKey": server_public_key,
@@ -47,12 +47,12 @@ async def init_handshake(
 
 @handshake.sub("confirm").post(plugins=[plugin.fix_window(10, 1)])
 async def confirm_handshake(
-    cache: SessionDAO,
+    session_dao: SessionDAO,
     session_id: Annotated[str, Param("header", alias="Session-Id")],
     confirm_data: Annotated[EncryptedDataDTO, Param("body")],
 ) -> Annotated[str, status.OK]:
     """确认请求"""
-    session = await cache.get_session(session_id)
+    session = await session_dao.get_session(session_id)
     if not session:
         raise InternalError("Session not found")
 
@@ -81,7 +81,7 @@ async def confirm_handshake(
     session.ServerEcdhPrivateKey = eph_priv
     session.ExpiredAt = datetime.now() + dt.timedelta(hours=1)
 
-    await cache.set_session(session)
+    await session_dao.set_session(session)
 
     response_string = json.dumps({"EphPublicKey": eph_pub})
     response_with_timestamp = CryptoUtils.append_timestamp(response_string)
@@ -95,12 +95,12 @@ async def confirm_handshake(
 
 @handshake.sub("establish").post(plugins=[plugin.fix_window(10, 1)])
 async def establish_session(
-    cache: SessionDAO,
+    session_dao: SessionDAO,
     session_id: Annotated[str, Param("header", alias="Session-Id")],
     establish_data: Annotated[EncryptedDataDTO, Param("body")],
 ) -> Annotated[str, status.OK]:
     """建立会话"""
-    session = await cache.get_session(session_id)
+    session = await session_dao.get_session(session_id)
     if not session:
         raise InternalError("Session not found")
 
@@ -136,7 +136,7 @@ async def establish_session(
     session.CreatedAt = datetime.now()
     session.ExpiredAt = datetime.now() + dt.timedelta(hours=1)
 
-    await cache.set_session(session)
+    await session_dao.set_session(session)
 
     data_string = json.dumps({"SessionId": new_session_id})
     data_with_timestamp = CryptoUtils.append_timestamp(data_string)
@@ -150,12 +150,12 @@ async def establish_session(
 
 @handshake.sub("complete").post(plugins=[plugin.fix_window(10, 1)])
 async def complete_handshake(
-    cache: SessionDAO,
+    session_dao: SessionDAO,
     session_id: Annotated[str, Param("header", alias="Session-Id")],
     complete_data: Annotated[EncryptedDataDTO, Param("body")],
 ) -> Annotated[str, status.OK]:
     """最终确认"""
-    session = await cache.get_session(session_id)
+    session = await session_dao.get_session(session_id)
     if not session or not session.MasterKey:
         raise InternalError("Session not found or not established")
 
@@ -192,6 +192,6 @@ async def complete_handshake(
 
     session.CreatedAt = datetime.now()
     session.ExpiredAt = datetime.now() + dt.timedelta(hours=1)
-    await cache.set_session(session)
+    await session_dao.set_session(session)
 
     return encrypted_response
