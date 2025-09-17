@@ -12,8 +12,7 @@ from src.crypto_utils.session_crypto import SessionCryptoUtils
 from src.api.http_errors import InternalError
 from src.services.user_service import UserService
 from src.repo.redis_manager import SessionDAO
-from src.api.dto_models import plain_text_decoder
-
+from src.utils.coder import CustomJSONEncoder, plain_text_decoder
 
 auth = Route("auth", deps=[UserService, SessionDAO])
 
@@ -68,7 +67,7 @@ async def login(
         "userId": str(user.Id) if user is not None else None,
     }
     return SessionCryptoUtils.append_timestamp_and_encrypt(
-        json.dumps(response), session.MasterKey
+        json.dumps(response, cls=CustomJSONEncoder), session.MasterKey
     )
 
 
@@ -104,6 +103,7 @@ async def register(
     else:
         hasher = PasswordHasher()
         password_hash = hasher.hash_password(password)
+        print(len(password_hash), password_hash)
         user = User(
             Email=email,
             PasswordHash=password_hash,
@@ -114,7 +114,7 @@ async def register(
         response = {"status": "success"}
 
     return SessionCryptoUtils.append_timestamp_and_encrypt(
-        json.dumps(response), master_key
+        json.dumps(response, cls=CustomJSONEncoder), master_key
     )
 
 
@@ -123,9 +123,7 @@ async def check_email(
     user_service: UserService,
     session_dao: SessionDAO,
     session_id: Annotated[str, Param("header", alias="Session-Id")],
-    check_email_data: Annotated[
-        str, Param("body", decoder=plain_text_decoder)
-    ],
+    check_email_data: Annotated[str, Param("body", decoder=plain_text_decoder)],
 ) -> Annotated[str, status.OK]:
     """检查邮箱是否已注册"""
     session = await session_dao.get_session(session_id)
@@ -154,5 +152,5 @@ async def check_email(
         }
 
     return SessionCryptoUtils.append_timestamp_and_encrypt(
-        json.dumps(response), master_key
+        json.dumps(response, cls=CustomJSONEncoder), master_key
     )

@@ -5,12 +5,14 @@ from lihil import Form, Param, Route, Annotated, status
 from lihil.plugins.premier import PremierPlugin
 from premier import Throttler
 
-from src.api.dto_models import AvatarUploadForm, plain_text_decoder
-from services.review_service import ReviewService
+from src.api.dto_models import AvatarUploadForm
+
+from src.services.review_service import ReviewService
 from src.crypto_utils.session_crypto import SessionCryptoUtils
 from src.api.http_errors import InternalError
 from src.services.user_service import UserService
 from src.repo.redis_manager import SessionDAO
+from src.utils.coder import CustomJSONEncoder, plain_text_decoder
 
 
 user = Route("user", deps=[UserService, SessionDAO, ReviewService])
@@ -30,7 +32,7 @@ async def get_all_users(
         raise InternalError("Authentication required")
     users = await user_service.get_other_users(UUID(session.UserId))
     return SessionCryptoUtils.append_timestamp_and_encrypt(
-        json.dumps(users), session.MasterKey
+        json.dumps(users, cls=CustomJSONEncoder), session.MasterKey
     )
 
 
@@ -72,7 +74,7 @@ async def get_user_info(
         "UpdatedAt": user.UpdatedAt,
     }
     encrypted_data = SessionCryptoUtils.append_timestamp_and_encrypt(
-        json.dumps(user_data), session.MasterKey
+        json.dumps(user_data, cls=CustomJSONEncoder), session.MasterKey
     )
 
     return encrypted_data
@@ -126,7 +128,7 @@ async def update_avatar(
 
     response = {"status": "success"}
     encrypted_data = SessionCryptoUtils.append_timestamp_and_encrypt(
-        json.dumps(response), session.MasterKey
+        json.dumps(response, cls=CustomJSONEncoder), session.MasterKey
     )
 
     return encrypted_data
@@ -169,17 +171,17 @@ async def get_account_info(
     flow_count = await file_service.get_all_flows_count_by_user_id_async(user_id)
 
     account_data = {
-        "lastLogin": last_login_time.isoformat() if last_login_time else None,
+        "lastLogin": last_login_time,
         "lastLoginDevice": device_info,
         "recentLoginActivity": login_count,
         "recentSubmitStage": recent_submit,
-        "lastPasswordUpdate": last_update_pwd.isoformat() if last_update_pwd else None,
+        "lastPasswordUpdate": last_update_pwd,
         "newApprovalResult": recent_reviews_count,
         "finishedWorkflow": flow_count,
         "participatedStage": state_count,
     }
     encrypted_data = SessionCryptoUtils.append_timestamp_and_encrypt(
-        json.dumps(account_data), session.MasterKey
+        json.dumps(account_data, cls=CustomJSONEncoder), session.MasterKey
     )
 
     return encrypted_data
@@ -212,7 +214,12 @@ async def get_public_key(
 
     return SessionCryptoUtils.append_timestamp_and_encrypt(
         json.dumps(
-            {"publicKey": user.PublicKey, "userId": str(user.Id), "userName": user.Name}
+            {
+                "publicKey": user.PublicKey,
+                "userId": user.Id,
+                "userName": user.Name,
+            },
+            cls=CustomJSONEncoder,
         ),
         session.MasterKey,
     )

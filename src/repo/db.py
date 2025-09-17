@@ -1,3 +1,5 @@
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from beanie import init_beanie
 from pymongo import AsyncMongoClient
 from sqlalchemy import text
@@ -101,11 +103,21 @@ class MSSQLServer:
             self.engine = None
             self.is_initialized = False
 
-    def get_session(self) -> AsyncSession:
-        """获取新的AsyncSession"""
+    @asynccontextmanager
+    async def get_session(self) -> AsyncGenerator[AsyncSession, None]:
+        """获取新的AsyncSession（使用上下文管理器）"""
         if self.engine is None:
             raise RuntimeError("数据库引擎未初始化")
-        return AsyncSession(self.engine, expire_on_commit=False)
+
+        session = AsyncSession(self.engine, expire_on_commit=False)
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
 
     async def create_tables(self):
         """创建所有数据库表"""

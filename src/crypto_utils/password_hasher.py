@@ -25,7 +25,7 @@ class PasswordHasher:
             type=Type.ID,
         )
 
-    def hash_password(self, password):
+    def hash_password(self, password) -> str:
         """
         哈希密码 - 替代 C# 的 PasswordHash.ArgonHashString
         """
@@ -34,7 +34,7 @@ class PasswordHasher:
 
         return self.hasher.hash(password)
 
-    def verify_password(self, hashed_password, password):
+    def verify_password(self, hashed_password, password) -> bool:
         """
         验证密码
         """
@@ -50,7 +50,7 @@ class PasswordHasher:
         ):
             return False
 
-    def needs_rehash(self, hashed_password):
+    def needs_rehash(self, hashed_password) -> bool:
         """
         检查哈希是否需要重新计算（参数变更时）
         """

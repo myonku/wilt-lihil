@@ -18,8 +18,3 @@ class AvatarUploadForm(LStruct):
     Avatar: UploadFile
     Data: str
     Type: str
-
-
-def plain_text_decoder(data: bytes) -> str:
-    """提供对plain/text类型的请求体解码器"""
-    return data.decode("utf-8")

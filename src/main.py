@@ -1,6 +1,6 @@
 from . import (
     log_config,
-)  # 启用uvicorn内置日志系统，该项目采用了日志中间件，如果只需要接口日志，可以注释该行关闭服务日志
+)  # 通过导入启用uvicorn日志，该项目采用了日志中间件，如果只需要接口日志，可以注释该行
 from typing import Literal
 from lihil import Lihil, Request, Response, Route
 from src.config import read_config
@@ -16,6 +16,7 @@ from src.middlewares.logging_middleware import logging_middleware_factory
 from src.api.handshake import handshake
 from src.api.auth import auth
 from src.api.review import review
+from src.api.user import user
 
 
 @problem_solver
@@ -27,7 +28,7 @@ async def lifespan(app: Lihil):
     config = read_config("settings.toml", ".env")
 
     await redis.connect(config)
-    await mssql.connect(config, False, False)
+    await mssql.connect(config, True, False)
     await mongo.connect(
         config,
         [ReviewStage, ReviewFlow, Review, UserProfile],
@@ -46,11 +47,8 @@ async def lifespan(app: Lihil):
 def app_factory() -> Lihil:
     app_config = read_config("settings.toml", ".env")
 
-    root = Route(
-        f"/api/v{app_config.API_VERSION}",
-        deps=[session_dao]
-    )
-    root.include_subroutes(handshake, auth, review)
+    root = Route(f"/api/v{app_config.API_VERSION}", deps=[session_dao])
+    root.include_subroutes(handshake, auth, review, user)
     root.sub("health").get(lambda: "ok")
 
     lhl = Lihil(root, app_config=app_config, lifespan=lifespan)

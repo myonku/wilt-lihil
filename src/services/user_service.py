@@ -1,6 +1,9 @@
 from uuid import UUID
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import and_, select
+import sqlalchemy
+
 from src.repo.db import MSSQLServer
 from src.repo.repository import UserDAO, GroupDAO, LoginHistoryDAO
 from src.repo.models import User, Group, LoginHistory, AccountStatus
@@ -35,37 +38,27 @@ class UserService:
             )
             return [{"Name": u.Name, "Id": u.Id} for u in users]
 
-    async def register_user(self, user_data: dict | User) -> UUID:
+    async def register_user(self, user: User) -> UUID:
         """注册用户"""
         async with self.mssql.get_session() as session:
-            user = User(**user_data) if isinstance(user_data, dict) else user_data
             return await self.user_dao.create(user, session)
 
     async def get_user_by_id(self, user_id: UUID) -> User | None:
         """根据ID获取用户"""
         async with self.mssql.get_session() as session:
-            user = await self.user_dao.get(user_id, session)
-            if user:
-                user.PasswordHash = ""
-            return user
+            return await self.user_dao.get(user_id, session)
 
     async def get_user_by_email(self, email: str) -> User | None:
         """根据邮箱获取用户"""
         async with self.mssql.get_session() as session:
             users = await self.user_dao.get_many(session, filters={"Email": email})
-            user = users[0] if users else None
-            if user:
-                user.PasswordHash = ""
-            return user
+            return users[0] if users else None
 
     async def get_user_by_name(self, username: str) -> User | None:
         """根据用户名获取用户"""
         async with self.mssql.get_session() as session:
             users = await self.user_dao.get_many(session, filters={"Name": username})
-            user = users[0] if users else None
-            if user:
-                user.PasswordHash = ""
-            return user
+            return users[0] if users else None
 
     async def get_user_pubkeys(self, user_ids: list[UUID]) -> dict[UUID, str]:
         """获取多个用户的公钥"""
@@ -121,7 +114,7 @@ class UserService:
                     user.PasswordHash,
                     password,
                 )
-                and user.AccountStatus == AccountStatus.Active
+                and not user.AccountStatus == AccountStatus.Suspended
             )
             return verified, user if verified else None
 
@@ -182,14 +175,18 @@ class UserService:
     async def get_login_history_in_week_count(self, user_id: UUID) -> int:
         """获取一周内的登录次数"""
         async with self.mssql.get_session() as session:
-            one_week_ago = datetime.now(timezone.utc) - timedelta(days=7)
+            one_week_ago = datetime.now() - timedelta(weeks=1)
 
-            count = await self.login_history_dao.count(
-                session,
-                UserId=user_id,
-                LoginTime=(">=", one_week_ago),
+            stmt = select(self.login_history_dao.model).where(
+                and_(
+                    self.login_history_dao.model.UserId == user_id,
+                    self.login_history_dao.model.LoginTime >= one_week_ago,
+                )
             )
-            return count
+
+            count_query = select(sqlalchemy.func.count()).select_from(stmt.subquery())
+            result = await session.execute(count_query)
+            return result.scalar_one()
 
     async def get_all_groups(self) -> list[Group]:
         """获取所有组"""

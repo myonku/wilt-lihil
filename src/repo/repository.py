@@ -2,7 +2,7 @@ from beanie import Document
 from pydantic import BaseModel
 from uuid import UUID
 from typing import TypeVar, Generic, Any
-from sqlalchemy import asc, desc, select, update, delete, insert
+from sqlalchemy import and_, asc, desc, select, update, delete, insert
 import sqlalchemy
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -163,7 +163,7 @@ class MSSQLBaseDAO(Generic[V]):
             sql = sql.offset(skip).limit(limit)
 
             result = await session.execute(sql)
-            return [self.model(**u) for u in result.mappings().fetchall()]
+            return list(result.scalars().all())
         except SQLAlchemyError as e:
             await session.rollback()
             raise e
@@ -241,13 +241,21 @@ class MSSQLBaseDAO(Generic[V]):
         """统计记录数量"""
         try:
             sql = select(self.model)
+            conditions = []
             for key, value in filters.items():
                 if hasattr(self.model, key):
-                    sql = sql.where(getattr(self.model, key) == value)
+                    column = getattr(self.model, key)
+                    if value is None:
+                        conditions.append(column.is_(None))
+                    else:
+                        conditions.append(column == value)
+            
+            if conditions:
+                sql = sql.where(and_(*conditions))
 
-            result = await session.execute(
-                select(sqlalchemy.func.count()).select_from(sql.subquery())
-            )
+            count_query = select(sqlalchemy.func.count()).select_from(sql.subquery())
+            
+            result = await session.execute(count_query)
             return result.scalar_one()
         except SQLAlchemyError as e:
             await session.rollback()

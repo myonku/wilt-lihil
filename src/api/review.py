@@ -10,7 +10,7 @@ from src.services.review_service import ReviewService
 from src.crypto_utils.crypto import CryptoUtils
 from src.api.http_errors import InternalError
 from src.crypto_utils.session_crypto import SessionCryptoUtils
-from src.api.dto_models import plain_text_decoder
+from src.utils.coder import CustomJSONEncoder, plain_text_decoder
 from src.services.user_service import UserService
 from src.repo.redis_manager import SessionDAO
 
@@ -50,16 +50,16 @@ async def create_review_flow(
     )
     response = {"status": "success" if signature_is_valid else "error"}
     if signature_is_valid:
-        flow_data = {
-            "Description": data_json.get("Description"),
-            "PublisherName": user.Name,
-            "OwnerId": user.Id,
-            "SignatureString": data_json.get("SignatureString"),
-            "Title": data_json.get("Title"),
-        }
-        await review_service.add_flow_async(ReviewFlow(**flow_data))
+        flow = ReviewFlow(
+            Description=data_json.get("Description"),
+            PublisherName=user.Name,
+            OwnerId=user.Id,
+            SignatureString=data_json.get("SignatureString"),
+            Title=data_json.get("Title"),
+        )
+        await review_service.add_flow_async(flow)
     return SessionCryptoUtils.append_timestamp_and_encrypt(
-        json.dumps(response), session.MasterKey
+        json.dumps(response, cls=CustomJSONEncoder), session.MasterKey
     )
 
 
@@ -111,7 +111,7 @@ async def get_review_stage(
     response_data = [stage.model_dump() for stage in stages] if stages else []
 
     return SessionCryptoUtils.append_timestamp_and_encrypt(
-        json.dumps(response_data), master_key
+        json.dumps(response_data, cls=CustomJSONEncoder), master_key
     )
 
 
@@ -138,7 +138,7 @@ async def get_flow_stages(
     response_data = [stage.model_dump() for stage in stages] if stages else []
 
     return SessionCryptoUtils.append_timestamp_and_encrypt(
-        json.dumps(response_data), master_key
+        json.dumps(response_data, cls=CustomJSONEncoder), master_key
     )
 
 
@@ -165,7 +165,7 @@ async def get_stage_reviews(
     response_data = [review.model_dump() for review in reviews] if reviews else []
 
     return SessionCryptoUtils.append_timestamp_and_encrypt(
-        json.dumps(response_data), master_key
+        json.dumps(response_data, cls=CustomJSONEncoder), master_key
     )
 
 
@@ -201,20 +201,16 @@ async def add_review(
     if not signature_is_valid:
         raise InternalError("签名验证失败")
 
-    review_data = {
-        "PublisherName": data_json.get("PublisherName"),
-        "PublisherId": user.Id,
-        "Content": data_json.get("Content"),
-        "BelongId": UUID(data_json["BelongId"]),
-        "FinalBelongId": UUID(data_json["FinalBelongId"]),
-        "IsPassed": bool(data_json["IsPassed"]),
-        "SignatureString": signature,
-    }
-
-    review = Review(**review_data)
-    await review_service.set_stage_record(
-        UUID(str(review_data["BelongId"])), review_data["IsPassed"]
+    review = Review(
+        PublisherName=data_json.get("PublisherName"),
+        PublisherId=user.Id,
+        Content=data_json.get("Content"),
+        BelongId=UUID(data_json["BelongId"]),
+        FinalBelongId=UUID(data_json["FinalBelongId"]),
+        IsPassed=bool(data_json["IsPassed"]),
+        SignatureString=signature,
     )
+    await review_service.set_stage_record(review.BelongId, review.IsPassed)
     await review_service.add_review(review)
 
     return
@@ -258,5 +254,5 @@ async def pre_upload(
     pubkeys_list = [pubkeys_dict.get(user_id, "") for user_id in user_ids]
 
     return SessionCryptoUtils.append_timestamp_and_encrypt(
-        json.dumps(pubkeys_list), master_key
+        json.dumps(pubkeys_list, cls=CustomJSONEncoder), master_key
     )
