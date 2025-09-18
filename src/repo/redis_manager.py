@@ -6,7 +6,7 @@ from typing import Any
 from redis.asyncio import Redis, from_url
 
 from src.config import ProjectConfig
-from src.repo.models import Session
+from src.repo.models import Session, UploadSession
 
 
 class RedisManager:
@@ -146,6 +146,44 @@ class SessionDAO(RedisBaseDAO):
             return None
 
 
-@asynccontextmanager
-async def session_dao(redis_manager: RedisManager) -> AsyncGenerator[SessionDAO, None]:
-    yield SessionDAO(redis_manager)
+class UploadSessionDAO(RedisBaseDAO):
+    def __init__(self, redis_manager: RedisManager):
+        super().__init__("upload:sessions", redis_manager)
+
+    async def set_session(self, session: UploadSession, expire: int = 3600) -> bool:
+        """设置上传会话"""
+
+        session_data = json.dumps(session.session_to_dict())
+        return await self.set(
+            session.Id,
+            session_data,
+            expire,
+        )
+
+    async def get_session(self, session_id: str) -> UploadSession | None:
+        """获取上传会话"""
+        session_data: str | bytes | None = await self.get(session_id)
+
+        if session_data is None:
+            return None
+
+        try:
+            if isinstance(session_data, (str, bytes)):
+                return UploadSession.dict_to_session(json.loads(session_data))
+            else:
+                return UploadSession.dict_to_session(session_data)
+        except (ValueError, AttributeError, ImportError) as e:
+            print(f"反序列化Session失败: {e}")
+            return None
+
+    async def del_session(self, session_id: str) -> bool:
+        session_data: str | bytes | None = await self.get(session_id)
+
+        if session_data is None:
+            return True
+
+        try:
+            return await self.delete(session_id)
+        except (ValueError, AttributeError, ImportError) as e:
+            print(f"删除键值对失败: {e}")
+            return False

@@ -1,9 +1,6 @@
-from datetime import datetime
-from uuid import UUID
 from lihil import UploadFile
 from lihil import Struct as LStruct
 from msgspec import Struct
-from pydantic import BaseModel
 
 
 class HandShakeInitDTO(Struct):
@@ -18,3 +15,8 @@ class AvatarUploadForm(LStruct):
     Avatar: UploadFile
     Data: str
     Type: str
+
+
+class UploadChunkForm(LStruct):
+    chunk: UploadFile
+    index: str

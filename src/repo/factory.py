@@ -6,12 +6,24 @@ from pymongo import AsyncMongoClient
 
 from src.config import ProjectConfig
 from src.repo.db import MongoDB, MSSQLServer
-from src.repo.redis_manager import RedisManager
+from src.repo.redis_manager import RedisManager, SessionDAO, UploadSessionDAO
 
 
 mongo = MongoDB()
 mssql = MSSQLServer()
 redis = RedisManager()
+
+
+@asynccontextmanager
+async def session_dao(redis_manager: RedisManager) -> AsyncGenerator[SessionDAO, None]:
+    yield SessionDAO(redis_manager)
+
+
+@asynccontextmanager
+async def upload_session_dao(
+    redis_manager: RedisManager,
+) -> AsyncGenerator[UploadSessionDAO, None]:
+    yield UploadSessionDAO(redis_manager)
 
 
 @asynccontextmanager

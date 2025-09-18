@@ -32,7 +32,6 @@ async def init_handshake(
     serverRandomBytes = SessionCryptoUtils.generate_random(16)
     session = Session(
         SessionId=session_id,
-        CreatedAt=datetime.now(),
         ExpiredAt=datetime.now() + dt.timedelta(hours=1),
         ServerRandom=serverRandomBytes,
         ClientRandom=clientRandomBytes,

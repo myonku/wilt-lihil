@@ -11,11 +11,13 @@ from src.services.review_service import ReviewService
 from src.crypto_utils.session_crypto import SessionCryptoUtils
 from src.api.http_errors import InternalError
 from src.services.user_service import UserService
+from src.services.profile_service import ProfileService
 from src.repo.redis_manager import SessionDAO
-from src.utils.coder import CustomJSONEncoder, plain_text_decoder
+from src.utils.coder import CustomJSONEncoder
+from src.utils.parser import parse_user_agent
 
 
-user = Route("user", deps=[UserService, SessionDAO, ReviewService])
+user = Route("user", deps=[UserService, SessionDAO, ReviewService, ProfileService])
 
 plugin = PremierPlugin(throttler=Throttler())
 
@@ -40,7 +42,7 @@ async def get_all_users(
 async def get_user_info(
     user_service: UserService,
     session_dao: SessionDAO,
-    request_data: Annotated[str, Param("body", decoder=plain_text_decoder)],
+    request_data: Annotated[str, Param("body", decoder=lambda b: b.decode())],
     session_id: Annotated[str, Param("header", alias="Session-Id")],
 ) -> Annotated[str, status.OK]:
     """获取用户信息"""
@@ -82,7 +84,7 @@ async def get_user_info(
 
 @user.sub("getAvatar").get(plugins=[plugin.fix_window(10, 1)])
 async def get_avatar(
-    file_service: ReviewService,
+    profile_service: ProfileService,
     session_dao: SessionDAO,
     session_id: Annotated[str, Param("header", alias="Session-Id")],
 ) -> Annotated[Any, status.OK]:
@@ -91,7 +93,7 @@ async def get_avatar(
     if not session or not session.UserId:
         raise InternalError("Invalid session")
 
-    profile = await file_service.get_avatar_by_id_async(UUID(session.UserId))
+    profile = await profile_service.get_avatar_by_id_async(UUID(session.UserId))
 
     if profile and profile.Data and profile.Type:
         import base64
@@ -104,9 +106,9 @@ async def get_avatar(
 
 @user.sub("updateAvatar").post(plugins=[plugin.fix_window(5, 1)])
 async def update_avatar(
-    file_service: ReviewService,
+    profile_service: ProfileService,
     session_dao: SessionDAO,
-    request: AvatarUploadForm,
+    request: Annotated[AvatarUploadForm, Form()],
     session_id: Annotated[str, Param("header", alias="Session-Id")],
 ) -> Annotated[str, status.OK]:
     """更新用户头像"""
@@ -124,7 +126,7 @@ async def update_avatar(
         raise InternalError("Invalid timestamp")
 
     file_bytes = await request.Avatar.read()
-    await file_service.update_avatar_async(UUID(user_id), file_bytes, request.Type)
+    await profile_service.update_avatar_async(UUID(user_id), file_bytes, request.Type)
 
     response = {"status": "success"}
     encrypted_data = SessionCryptoUtils.append_timestamp_and_encrypt(
@@ -137,7 +139,7 @@ async def update_avatar(
 @user.sub("getAccountInfo").post(plugins=[plugin.fix_window(10, 1)])
 async def get_account_info(
     user_service: UserService,
-    file_service: ReviewService,
+    review_service: ReviewService,
     session_dao: SessionDAO,
     session_id: Annotated[str, Param("header", alias="Session-Id")],
 ) -> Annotated[str, status.OK]:
@@ -159,16 +161,16 @@ async def get_account_info(
     user_agent = last_history.UserAgent if last_history else ""
 
     last_update_pwd = user.LastUpdatePasswordAt
-    recent_submit = await file_service.get_all_flow_stage_by_flow_id(user_id)
-    recent_reviews_count = await file_service.get_all_reviews_count_by_user_flows_async(
-        user.Id
+    recent_submit = await review_service.get_all_flow_stage_by_flow_id(user_id)
+    recent_reviews_count = (
+        await review_service.get_all_reviews_count_by_user_flows_async(user.Id)
     )
 
     device = parse_user_agent(user_agent) if user_agent else ""
     device_info = f"{device} | {ip_address}" if last_history else ""
 
-    state_count = await file_service.get_all_stage_count_by_user_id_async(user_id)
-    flow_count = await file_service.get_all_flows_count_by_user_id_async(user_id)
+    state_count = await review_service.get_all_stage_count_by_user_id_async(user_id)
+    flow_count = await review_service.get_all_flows_count_by_user_id_async(user_id)
 
     account_data = {
         "lastLogin": last_login_time,
@@ -191,7 +193,7 @@ async def get_account_info(
 async def get_public_key(
     user_service: UserService,
     session_dao: SessionDAO,
-    request_data: Annotated[str, Param("body", decoder=plain_text_decoder)],
+    request_data: Annotated[str, Param("body", decoder=lambda b: b.decode())],
     session_id: Annotated[str, Param("header", alias="Session-Id")],
 ) -> Annotated[str, status.OK]:
     """获取用户公钥"""
@@ -223,19 +225,3 @@ async def get_public_key(
         ),
         session.MasterKey,
     )
-
-
-def parse_user_agent(user_agent: str) -> str:
-    """解析用户代理字符串"""
-    if "Windows" in user_agent:
-        return "Windows"
-    elif "Mac" in user_agent:
-        return "Mac"
-    elif "Linux" in user_agent:
-        return "Linux"
-    elif "Android" in user_agent:
-        return "Android"
-    elif "iPhone" in user_agent:
-        return "iPhone"
-    else:
-        return "Unknown Device"

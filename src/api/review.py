@@ -10,7 +10,7 @@ from src.services.review_service import ReviewService
 from src.crypto_utils.crypto import CryptoUtils
 from src.api.http_errors import InternalError
 from src.crypto_utils.session_crypto import SessionCryptoUtils
-from src.utils.coder import CustomJSONEncoder, plain_text_decoder
+from src.utils.coder import CustomJSONEncoder
 from src.services.user_service import UserService
 from src.repo.redis_manager import SessionDAO
 
@@ -26,7 +26,7 @@ async def create_review_flow(
     review_service: ReviewService,
     session_dao: SessionDAO,
     session_id: Annotated[str, Param("header", alias="Session-Id")],
-    create_data: Annotated[str, Param("body", decoder=plain_text_decoder)],
+    create_data: Annotated[str, Param("body", decoder=lambda b: b.decode())],
 ) -> Annotated[Any, status.OK]:
     """创建评审流"""
     session = await session_dao.get_session(session_id)
@@ -68,7 +68,7 @@ async def get_review_flow(
     review_service: ReviewService,
     session_dao: SessionDAO,
     session_id: Annotated[str, Param("header", alias="Session-Id")],
-    request_data: Annotated[str, Param("body", decoder=plain_text_decoder)],
+    request_data: Annotated[str, Param("body", decoder=lambda b: b.decode())],
 ) -> Annotated[Any, status.OK]:
     """获取用户的评审流"""
     session = await session_dao.get_session(session_id)
@@ -94,7 +94,7 @@ async def get_review_stage(
     review_service: ReviewService,
     session_dao: SessionDAO,
     session_id: Annotated[str, Param("header", alias="Session-Id")],
-    request_data: Annotated[str, Param("body", decoder=plain_text_decoder)],
+    request_data: Annotated[str, Param("body", decoder=lambda b: b.decode())],
 ) -> Annotated[Any, status.OK]:
     """获取用户的评审阶段"""
     session = await session_dao.get_session(session_id)
@@ -120,7 +120,7 @@ async def get_flow_stages(
     review_service: ReviewService,
     session_dao: SessionDAO,
     session_id: Annotated[str, Param("header", alias="Session-Id")],
-    request_data: Annotated[str, Param("body", decoder=plain_text_decoder)],
+    request_data: Annotated[str, Param("body", decoder=lambda b: b.decode())],
 ) -> Annotated[Any, status.OK]:
     """根据流程ID获取所有阶段"""
     session = await session_dao.get_session(session_id)
@@ -147,7 +147,7 @@ async def get_stage_reviews(
     review_service: ReviewService,
     session_dao: SessionDAO,
     session_id: Annotated[str, Param("header", alias="Session-Id")],
-    request_data: Annotated[str, Param("body", decoder=plain_text_decoder)],
+    request_data: Annotated[str, Param("body", decoder=lambda b: b.decode())],
 ) -> Annotated[Any, status.OK]:
     """根据阶段ID获取评审记录"""
     session = await session_dao.get_session(session_id)
@@ -175,7 +175,7 @@ async def add_review(
     review_service: ReviewService,
     session_dao: SessionDAO,
     session_id: Annotated[str, Param("header", alias="Session-Id")],
-    request_data: Annotated[str, Param("body", decoder=plain_text_decoder)],
+    request_data: Annotated[str, Param("body", decoder=lambda b: b.decode())],
 ) -> Annotated[None, status.OK]:
     """添加评审记录"""
     session = await session_dao.get_session(session_id)
@@ -221,7 +221,7 @@ async def pre_upload(
     user_service: UserService,
     session_dao: SessionDAO,
     session_id: Annotated[str, Param("header", alias="Session-Id")],
-    request_data: Annotated[str, Param("body", decoder=plain_text_decoder)],
+    request_data: Annotated[str, Param("body", decoder=lambda b: b.decode())],
 ) -> Annotated[Any, status.OK]:
     """预上传验证"""
     session = await session_dao.get_session(session_id)

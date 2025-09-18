@@ -218,7 +218,7 @@ class LogRecord(BaseModel):
 class Session(BaseModel):
     SessionId: str
     MasterKey: bytes | None = None
-    CreatedAt: datetime
+    CreatedAt: datetime = datetime.now()
     ExpiredAt: datetime
     UserId: str | None = None
     ClientRandom: bytes | None = None  # 16字节随机数
@@ -303,4 +303,34 @@ class Session(BaseModel):
             ServerEcdhPublicKey=server_public_key,
             ClientEcdhPublicKey=client_public_key,
             MasterKey=master_key,
+        )
+
+
+class UploadSession(BaseModel):
+    Id: str = str(uuid4())
+    TextData: str
+    CreatedAt: datetime = datetime.now()
+    ChunkNums: int | None = None
+    Processed: int = 0
+
+    def session_to_dict(self) -> dict[str, str]:
+        """将 Session 对象转换为可序列化的字典"""
+        data = {
+            "Id": self.Id,
+            "CreatedAt": self.CreatedAt.isoformat(),
+            "TextData": self.TextData,
+            "ChunkNums": self.ChunkNums,
+            "Processed": self.Processed,
+        }
+        return data
+
+    @classmethod
+    def dict_to_session(cls, data: dict[str, Any]):
+        """从字典创建 Session 对象"""
+        return cls(
+            Id=data["Id"],
+            CreatedAt=datetime.fromisoformat(data["CreatedAt"]),
+            TextData=data["TextData"],
+            ChunkNums=data["ChunkNums"],
+            Processed=data["Processed"],
         )

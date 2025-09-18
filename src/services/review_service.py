@@ -2,8 +2,8 @@ from datetime import datetime, timedelta, timezone
 from uuid import UUID
 from beanie.operators import In, Eq, And, GT, ElemMatch
 
-from src.repo.models import UserProfile, Review, ReviewFlow, ReviewStage
-from src.repo.repository import ProfileDAO, ReviewDAO, ReviewFlowDAO, ReviewStageDAO
+from src.repo.models import Review, ReviewFlow, ReviewStage
+from src.repo.repository import  ReviewDAO, ReviewFlowDAO, ReviewStageDAO
 
 
 class ReviewService:
@@ -16,12 +16,10 @@ class ReviewService:
         review_dao: ReviewDAO,
         stage_dao: ReviewStageDAO,
         flow_dao: ReviewFlowDAO,
-        profile_dao: ProfileDAO,
     ):
         self.review_dao = review_dao
         self.stage_dao = stage_dao
         self.flow_dao = flow_dao
-        self.profile_dao = profile_dao
 
     async def get_all_reviews_by_user_id(self, user_id: UUID) -> list[Review] | None:
         """获取用户的所有批注（排除签名字段）"""
@@ -176,28 +174,4 @@ class ReviewService:
             In(Review.FinalBelongId, flow_ids), GT(Review.CreatedAt, one_week_ago)
         )
         return await self.review_dao.count_documents(query)
-
-    # 头像相关方法
-    async def add_avatar_async(self, profile: UserProfile) -> None:
-        """添加用户头像"""
-        await self.profile_dao.create(profile)
-
-    async def get_avatar_by_id_async(self, user_id: UUID) -> UserProfile | None:
-        """根据用户ID获取头像"""
-        profiles = await self.profile_dao.get_many_by_field("UserId", user_id)
-        return profiles[0] if profiles else None
-
-    async def update_avatar_async(
-        self, user_id: UUID, data: bytes | None, file_type: str | None
-    ) -> None:
-        """更新用户头像"""
-        existing_profiles = await self.profile_dao.get_many_by_field("UserId", user_id)
-
-        if existing_profiles:
-            profile = existing_profiles[0]
-            profile.Data = data
-            profile.Type = file_type
-            await profile.save()
-        else:
-            new_profile = UserProfile(_id=user_id, Data=data, Type=file_type)
-            await self.profile_dao.create(new_profile)
+    
